@@ -23,13 +23,13 @@ S3_PREFIX=temp/test_streaming_file_sink-$(uuidgen)
 OUTPUT_PATH="$TEST_DATA_DIR/$S3_PREFIX"
 S3_OUTPUT_PATH="s3://$IT_CASE_S3_BUCKET/$S3_PREFIX"
 source "$(dirname "$0")"/common.sh
-source "$(dirname "$0")"/common_s3.sh
+#source "$(dirname "$0")"/common_s3.sh
 
 # randomly set up openSSL with dynamically/statically linked libraries
 OPENSSL_LINKAGE=$(if (( RANDOM % 2 )) ; then echo "dynamic"; else echo "static"; fi)
 echo "Executing test with ${OPENSSL_LINKAGE} openSSL linkage (random selection between 'dynamic' and 'static')"
 
-s3_setup hadoop
+#s3_setup hadoop
 set_conf_ssl "mutual" "OPENSSL" "${OPENSSL_LINKAGE}"
 set_config_key "metrics.fetcher.update-interval" "2000"
 # this test relies on global failovers
@@ -97,6 +97,13 @@ function get_total_number_of_valid_lines {
   fi
 }
 
+function save_trace {
+    echo "saving trace ......"
+    jstack_jobmanager
+    jstack_taskmanager
+    upload_logs
+}
+
 ###################################
 # Waits until a number of values have been written within a timeout.
 # If the timeout expires, exit with return code 1.
@@ -121,6 +128,7 @@ function wait_for_complete_result {
     while [[ ${number_of_values} -lt ${expected_number_of_values} ]]; do
         if [[ ${seconds_elapsed} -ge ${polling_timeout} ]]; then
             echo "Did not produce expected number of values within ${polling_timeout}s"
+            save_trace
             exit 1
         fi
 
@@ -131,6 +139,34 @@ function wait_for_complete_result {
         if [[ ${previous_number_of_values} -ne ${number_of_values} ]]; then
             echo "Number of produced values ${number_of_values}/${expected_number_of_values}"
             previous_number_of_values=${number_of_values}
+        fi
+    done
+}
+
+function wait_for_restart_to_complete_with_timeout {
+    local base_num_restarts=$1
+    local jobid=$2
+    local polling_timeout=$3
+    local polling_interval=5
+    local seconds_elapsed=0
+
+    local current_num_restarts=${base_num_restarts}
+    local expected_num_restarts=$((current_num_restarts + 1))
+
+    echo "Waiting for restart to happen"
+    while ! [[ ${current_num_restarts} -eq ${expected_num_restarts} ]]; do
+        if [[ ${seconds_elapsed} -ge ${polling_timeout} ]]; then
+            echo "Did not restart job within ${polling_timeout}s"
+            save_trace
+            exit 1
+        fi
+
+        sleep ${polling_interval}
+        ((seconds_elapsed += ${polling_interval}))
+
+        current_num_restarts=$(get_job_metric ${jobid} "fullRestarts")
+        if [[ -z ${current_num_restarts} ]]; then
+            current_num_restarts=${base_num_restarts}
         fi
     done
 }
@@ -171,10 +207,10 @@ echo "Starting 2 TMs"
 "$FLINK_DIR/bin/taskmanager.sh" start
 "$FLINK_DIR/bin/taskmanager.sh" start
 
-wait_for_restart_to_complete 1 ${JOB_ID}
+wait_for_restart_to_complete_with_timeout 1 ${JOB_ID} 300
 
 echo "Waiting until all values have been produced"
-wait_for_complete_result 60000 900
+wait_for_complete_result 60000 480
 
 cancel_job "${JOB_ID}"
 

@@ -777,3 +777,26 @@ function extract_job_id_from_job_submission_return() {
     echo "$JOB_ID"
 }
 
+function jstack_process {
+    local pids=( $(jps | grep -E "${1}" | awk '{print $1}') )
+    for pid in "${pids[@]}"; do
+		echo "jstack process ${pid} for ${1}"
+
+		jstack $pid > ${FLINK_DIR}/log/${pid}.jstack
+	done
+}
+
+function jstack_jobmanager {
+    jstack_process 'StandaloneSessionClusterEntrypoint'
+}
+
+function jstack_taskmanager {
+    jstack_process 'TaskManagerRunner|TaskManager'
+}
+
+function upload_logs {
+    tar -czvf log.tgz ${FLINK_DIR}/log
+    echo "Uploading to transfer.sh"
+    curl --upload-file log.tgz --max-time 60 https://transfer.sh
+    rm -f log.tgz
+}
