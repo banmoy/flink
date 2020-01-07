@@ -23,13 +23,13 @@ S3_PREFIX=temp/test_streaming_file_sink-$(uuidgen)
 OUTPUT_PATH="$TEST_DATA_DIR/$S3_PREFIX"
 S3_OUTPUT_PATH="s3://$IT_CASE_S3_BUCKET/$S3_PREFIX"
 source "$(dirname "$0")"/common.sh
-source "$(dirname "$0")"/common_s3.sh
+#source "$(dirname "$0")"/common_s3.sh
 
 # randomly set up openSSL with dynamically/statically linked libraries
 OPENSSL_LINKAGE=$(if (( RANDOM % 2 )) ; then echo "dynamic"; else echo "static"; fi)
 echo "Executing test with ${OPENSSL_LINKAGE} openSSL linkage (random selection between 'dynamic' and 'static')"
 
-s3_setup hadoop
+#s3_setup hadoop
 set_conf_ssl "mutual" "OPENSSL" "${OPENSSL_LINKAGE}"
 set_config_key "metrics.fetcher.update-interval" "2000"
 # this test relies on global failovers
@@ -121,6 +121,9 @@ function wait_for_complete_result {
     while [[ ${number_of_values} -lt ${expected_number_of_values} ]]; do
         if [[ ${seconds_elapsed} -ge ${polling_timeout} ]]; then
             echo "Did not produce expected number of values within ${polling_timeout}s"
+            jstack_jobmanager
+            jstack_taskmanager
+            upload_logs
             exit 1
         fi
 
@@ -174,7 +177,7 @@ echo "Starting 2 TMs"
 wait_for_restart_to_complete 1 ${JOB_ID}
 
 echo "Waiting until all values have been produced"
-wait_for_complete_result 60000 900
+wait_for_complete_result 60000 480
 
 cancel_job "${JOB_ID}"
 
