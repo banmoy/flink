@@ -194,6 +194,8 @@ wait_job_running ${JOB_ID}
 
 wait_num_checkpoints "${JOB_ID}" 3
 
+ps -lef | grep java
+
 echo "Killing TM"
 kill_random_taskmanager
 
@@ -202,6 +204,8 @@ echo "Starting TM"
 
 wait_for_restart_to_complete 0 ${JOB_ID}
 
+ps -lef | grep java
+
 echo "Killing 2 TMs"
 kill_random_taskmanager
 kill_random_taskmanager
@@ -209,6 +213,8 @@ kill_random_taskmanager
 echo "Starting 2 TMs"
 "$FLINK_DIR/bin/taskmanager.sh" start
 "$FLINK_DIR/bin/taskmanager.sh" start
+
+ps -lef | grep java
 
 wait_for_restart_to_complete_with_timeout 1 ${JOB_ID} 300
 
