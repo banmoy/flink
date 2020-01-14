@@ -153,7 +153,7 @@ function wait_for_restart_to_complete_with_timeout {
     local current_num_restarts=${base_num_restarts}
     local expected_num_restarts=$((current_num_restarts + 1))
 
-    echo "Waiting for restart to happen"
+    echo "Waiting for restart to happen with expected_num_restarts ${expected_num_restarts} and current_num_restarts ${current_num_restarts}"
     while ! [[ ${current_num_restarts} -eq ${expected_num_restarts} ]]; do
         if [[ ${seconds_elapsed} -ge ${polling_timeout} ]]; then
             echo "Did not restart job within ${polling_timeout}s"
@@ -165,10 +165,13 @@ function wait_for_restart_to_complete_with_timeout {
         ((seconds_elapsed += ${polling_interval}))
 
         current_num_restarts=$(get_job_metric ${jobid} "fullRestarts")
+        echo "current_num_restarts ${current_num_restarts}"
         if [[ -z ${current_num_restarts} ]]; then
             current_num_restarts=${base_num_restarts}
+            echo "current_num_restarts not exist"
         fi
     done
+    echo "restart completed with expected_num_restarts ${expected_num_restarts} and current_num_restarts ${current_num_restarts}"
 }
 
 start_cluster

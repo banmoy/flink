@@ -720,14 +720,17 @@ function wait_for_restart_to_complete {
     local current_num_restarts=${base_num_restarts}
     local expected_num_restarts=$((current_num_restarts + 1))
 
-    echo "Waiting for restart to happen"
+    echo "Waiting for restart to happen with expected_num_restarts ${expected_num_restarts} and current_num_restarts ${current_num_restarts}"
     while ! [[ ${current_num_restarts} -eq ${expected_num_restarts} ]]; do
         sleep 5
         current_num_restarts=$(get_job_metric ${jobid} "fullRestarts")
+        echo "current_num_restarts ${current_num_restarts}"
         if [[ -z ${current_num_restarts} ]]; then
             current_num_restarts=${base_num_restarts}
+            echo "current_num_restarts not exist"
         fi
     done
+    echo "restart completed with expected_num_restarts ${expected_num_restarts} and current_num_restarts ${current_num_restarts}"
 }
 
 function find_latest_completed_checkpoint {
