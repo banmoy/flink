@@ -907,6 +907,9 @@ public abstract class FlinkKafkaConsumerBase<T> extends RichParallelSourceFuncti
 					// on this function at a time: either snapshotState() or notifyCheckpointComplete()
 					pendingOffsetsToCommit.put(context.getCheckpointId(), restoredState);
 				}
+
+				LOG.debug("Consumer subtask {} checkpoint {} with null fetcher",
+					getRuntimeContext().getIndexOfThisSubtask(), context.getCheckpointId());
 			} else {
 				HashMap<KafkaTopicPartition, Long> currentOffsets = fetcher.snapshotCurrentState();
 
@@ -920,6 +923,9 @@ public abstract class FlinkKafkaConsumerBase<T> extends RichParallelSourceFuncti
 					unionOffsetStates.add(
 							Tuple2.of(kafkaTopicPartitionLongEntry.getKey(), kafkaTopicPartitionLongEntry.getValue()));
 				}
+
+				LOG.debug("Consumer subtask {} checkpoint {} with fetcher",
+					getRuntimeContext().getIndexOfThisSubtask(), context.getCheckpointId());
 			}
 
 			if (offsetCommitMode == OffsetCommitMode.ON_CHECKPOINTS) {
@@ -928,6 +934,13 @@ public abstract class FlinkKafkaConsumerBase<T> extends RichParallelSourceFuncti
 					pendingOffsetsToCommit.remove(0);
 				}
 			}
+
+			TreeMap<KafkaTopicPartition, Long> snapshotState = new TreeMap<>(new KafkaTopicPartition.Comparator());
+			for (Tuple2<KafkaTopicPartition, Long> kafkaOffset : unionOffsetStates.get()) {
+				snapshotState.put(kafkaOffset.f0, kafkaOffset.f1);
+			}
+			LOG.debug("Consumer subtask {} checkpoint {} with state {}",
+				getRuntimeContext().getIndexOfThisSubtask(), context.getCheckpointId(), snapshotState);
 		}
 	}
 

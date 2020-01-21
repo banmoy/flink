@@ -117,11 +117,7 @@ flink-queryable-state/flink-queryable-state-runtime,\
 flink-queryable-state/flink-queryable-state-client-java"
 
 MODULES_KAFKA_GELLY="\
-flink-libraries/flink-gelly,\
-flink-libraries/flink-gelly-scala,\
-flink-libraries/flink-gelly-examples,\
-flink-connectors/flink-connector-kafka,\
-flink-connectors/flink-sql-connector-kafka,"
+flink-connectors/flink-connector-kafka"
 
 MODULES_TESTS="\
 flink-tests"

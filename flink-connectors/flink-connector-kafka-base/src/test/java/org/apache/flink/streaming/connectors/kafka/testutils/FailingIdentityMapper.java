@@ -96,6 +96,8 @@ public class FailingIdentityMapper<T> extends RichMapFunction<T, T> implements
 
 	@Override
 	public List<Integer> snapshotState(long checkpointId, long timestamp) throws Exception {
+		LOG.info("============================> Failing mapper  {} checkpoint {} : totalCount={}",
+			getRuntimeContext().getIndexOfThisSubtask(), checkpointId, numElementsTotal);
 		return Collections.singletonList(numElementsTotal);
 	}
 

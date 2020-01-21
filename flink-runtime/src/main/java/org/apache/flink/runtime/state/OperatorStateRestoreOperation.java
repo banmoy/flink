@@ -19,6 +19,9 @@
 package org.apache.flink.runtime.state;
 
 import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.UnloadableDummyTypeSerializer;
 import org.apache.flink.core.fs.CloseableRegistry;
@@ -39,6 +42,9 @@ import java.util.Map;
  * Implementation of operator state restore operation.
  */
 public class OperatorStateRestoreOperation implements RestoreOperation<Void> {
+
+	private static final Logger LOG = LoggerFactory.getLogger(OperatorStateRestoreOperation.class);
+
 	private final CloseableRegistry closeStreamOnCancelRegistry;
 	private final ClassLoader userClassloader;
 	private final Map<String, PartitionableListState<?>> registeredOperatorStates;
@@ -60,6 +66,8 @@ public class OperatorStateRestoreOperation implements RestoreOperation<Void> {
 
 	@Override
 	public Void restore() throws Exception {
+		LOG.info("Restoring from {} state handles in {}", stateHandles.size(), Thread.currentThread());;
+
 		if (stateHandles.isEmpty()) {
 			return null;
 		}
@@ -154,6 +162,8 @@ public class OperatorStateRestoreOperation implements RestoreOperation<Void> {
 					stateHandle.getStateNameToPartitionOffsets().entrySet()) {
 
 					final String stateName = nameToOffsets.getKey();
+
+					LOG.info("Restored state name {} in {}", stateName, Thread.currentThread());
 
 					PartitionableListState<?> listStateForName = registeredOperatorStates.get(stateName);
 					if (listStateForName == null) {
