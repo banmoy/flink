@@ -28,6 +28,8 @@ import org.apache.flink.runtime.state.CheckpointMetadataOutputStream;
 import org.apache.flink.runtime.state.CheckpointStorageLocation;
 import org.apache.flink.runtime.state.CompletedCheckpointStorageLocation;
 import org.apache.flink.runtime.state.StateUtil;
+import org.apache.flink.runtime.state.StreamStateHandle;
+import org.apache.flink.runtime.state.memory.ByteStreamStateHandle;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.Preconditions;
 
@@ -276,6 +278,13 @@ public class PendingCheckpoint {
 					finalizedLocation = out.closeAndFinalizeCheckpoint();
 				}
 
+				StreamStateHandle metaDataHandle = finalizedLocation.getMetadataHandle();
+				if (metaDataHandle instanceof ByteStreamStateHandle) {
+					byte[] data = ((ByteStreamStateHandle) metaDataHandle).getData();
+					String hexString = bytesToHex(data);
+					LOG.info(hexString);
+				}
+
 				CompletedCheckpoint completed = new CompletedCheckpoint(
 						jobId,
 						checkpointId,
@@ -517,5 +526,17 @@ public class PendingCheckpoint {
 	public String toString() {
 		return String.format("Pending Checkpoint %d @ %d - confirmed=%d, pending=%d",
 				checkpointId, checkpointTimestamp, getNumberOfAcknowledgedTasks(), getNumberOfNonAcknowledgedTasks());
+	}
+
+	private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
+
+	private static String bytesToHex(byte[] bytes) {
+		char[] hexChars = new char[bytes.length * 2];
+		for (int j = 0; j < bytes.length; j++) {
+			int v = bytes[j] & 0xFF;
+			hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+			hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+		}
+		return new String(hexChars);
 	}
 }
