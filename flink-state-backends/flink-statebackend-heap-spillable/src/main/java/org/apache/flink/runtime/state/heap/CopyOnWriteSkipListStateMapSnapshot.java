@@ -61,6 +61,11 @@ public class CopyOnWriteSkipListStateMapSnapshot<K, N, S>
 	private final ResourceGuard.Lease lease;
 
 	/**
+	 * Whether this snapshot has been released.
+	 */
+	private boolean released;
+
+	/**
 	 * Creates a new {@link CopyOnWriteSkipListStateMap}.
 	 *
 	 * @param owningStateMap the {@link CopyOnWriteSkipListStateMap} for which this object represents a snapshot.
@@ -74,6 +79,7 @@ public class CopyOnWriteSkipListStateMapSnapshot<K, N, S>
 		this.snapshotVersion = owningStateMap.getStateMapVersion();
 		this.numberOfEntriesInSnapshotData = owningStateMap.size();
 		this.lease = lease;
+		this.released = false;
 	}
 
 	/**
@@ -85,8 +91,13 @@ public class CopyOnWriteSkipListStateMapSnapshot<K, N, S>
 
 	@Override
 	public void release() {
+		released = true;
 		owningStateMap.releaseSnapshot(this);
 		lease.close();
+	}
+
+	public boolean isReleased() {
+		return released;
 	}
 
 	@Override

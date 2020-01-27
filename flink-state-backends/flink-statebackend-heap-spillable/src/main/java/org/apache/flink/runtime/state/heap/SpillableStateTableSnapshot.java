@@ -71,4 +71,13 @@ public class SpillableStateTableSnapshot<K, N, S> extends AbstractStateTableSnap
 
 		return stateMapSnapshot;
 	}
+
+	@Override
+	public void release() {
+		for (CopyOnWriteSkipListStateMapSnapshot snapshot : stateMapSnapshots) {
+			if (!snapshot.isReleased()) {
+				snapshot.release();
+			}
+		}
+	}
 }

@@ -54,12 +54,12 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 
 	private static final Map<Class<? extends StateDescriptor>, StateFactory> SPILLABLE_STATE_FACTORIES =
 		Stream.of(
-			Tuple2.of(ValueStateDescriptor.class, (StateFactory) HeapValueState::create),
+			Tuple2.of(ValueStateDescriptor.class, (StateFactory) SpillableValueState::create),
 			Tuple2.of(ListStateDescriptor.class, (StateFactory) SpillableListState::create),
 			Tuple2.of(MapStateDescriptor.class, (StateFactory) SpillableMapState::create),
-			Tuple2.of(AggregatingStateDescriptor.class, (StateFactory) HeapAggregatingState::create),
-			Tuple2.of(ReducingStateDescriptor.class, (StateFactory) HeapReducingState::create),
-			Tuple2.of(FoldingStateDescriptor.class, (StateFactory) HeapFoldingState::create)
+			Tuple2.of(AggregatingStateDescriptor.class, (StateFactory) SpillableAggregatingState::create),
+			Tuple2.of(ReducingStateDescriptor.class, (StateFactory) SpillableReducingState::create),
+			Tuple2.of(FoldingStateDescriptor.class, (StateFactory) SpillableFoldingState::create)
 		).collect(Collectors.toMap(t -> t.f0, t -> t.f1));
 
 	private final SpaceAllocator spaceAllocator;
