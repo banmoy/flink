@@ -38,11 +38,17 @@ import org.apache.flink.runtime.state.StateSnapshotTransformer;
 import org.apache.flink.runtime.state.StreamCompressionDecorator;
 import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
 import org.apache.flink.runtime.state.ttl.TtlTimeProvider;
+import org.apache.flink.util.FileUtils;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.IOUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.Nonnull;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -51,6 +57,8 @@ import java.util.stream.Stream;
  * TODO how to remove log in the constructor of HeapKeyedStateBackend.
  */
 public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
+
+	private static final Logger LOG = LoggerFactory.getLogger(SpillableKeyedStateBackend.class);
 
 	private static final Map<Class<? extends StateDescriptor>, StateFactory> SPILLABLE_STATE_FACTORIES =
 		Stream.of(
@@ -63,6 +71,7 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 		).collect(Collectors.toMap(t -> t.f0, t -> t.f1));
 
 	private final SpaceAllocator spaceAllocator;
+	private File[] localPaths;
 
 	public SpillableKeyedStateBackend(
 		TaskKvStateRegistry kvStateRegistry,
@@ -78,7 +87,8 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 		HeapPriorityQueueSetFactory priorityQueueSetFactory,
 		HeapSnapshotStrategy<K> snapshotStrategy,
 		InternalKeyContext<K> keyContext,
-		SpaceAllocator spaceAllocator) {
+		SpaceAllocator spaceAllocator,
+		File[] localPaths) {
 		super(
 			kvStateRegistry,
 			keySerializer,
@@ -94,6 +104,7 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 			snapshotStrategy,
 			keyContext);
 		this.spaceAllocator = spaceAllocator;
+		this.localPaths = localPaths;
 	}
 
 	@Override
@@ -119,6 +130,14 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 		// TODO how to safely close space allocator, for example in the case
 		// some snapshots are still use the space
 		IOUtils.closeQuietly(spaceAllocator);
+
+		for (File dir : localPaths) {
+			try {
+				FileUtils.deleteDirectory(dir);
+			} catch (IOException ex) {
+				LOG.warn("Could not delete working directory: {}", dir, ex);
+			}
+		}
 	}
 
 	private interface StateFactory {

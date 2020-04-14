@@ -18,6 +18,8 @@
 
 package org.apache.flink.runtime.state.heap.space;
 
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.TestLogger;
@@ -38,32 +40,28 @@ public class SpaceAllocatorTest extends TestLogger {
 	@Test
 	public void testConstruct() throws Exception {
 		int chunkSize = 64 * 1024 * 1024;
+		Configuration configuration = new Configuration();
+		configuration.set(SpaceOptions.CHUNK_SIZE, new MemorySize(chunkSize));
 
 		// construct heap space allocator with preallocate
-		SpaceConfiguration spaceConfiguration1 =
-			new SpaceConfiguration(chunkSize, true, ChunkAllocator.SpaceType.HEAP);
-		SpaceAllocator spaceAllocator1 = new SpaceAllocator(spaceConfiguration1);
+		configuration.set(SpaceOptions.SPACE_TYPE, SpaceAllocator.SpaceType.HEAP.name());
+		SpaceAllocator spaceAllocator1 = new SpaceAllocator(configuration, null);
 		Assert.assertTrue(spaceAllocator1.getChunkAllocator() instanceof HeapBufferChunkAllocator);
-		Assert.assertEquals(1, spaceAllocator1.getChunkIdGenerator().get());
 		spaceAllocator1.close();
 
 		// construct off-heap space allocator without preallocate
-		SpaceConfiguration spaceConfiguration2 =
-			new SpaceConfiguration(chunkSize, false, ChunkAllocator.SpaceType.OFFHEAP);
-		SpaceAllocator spaceAllocator2 = new SpaceAllocator(spaceConfiguration2);
+		configuration.set(SpaceOptions.SPACE_TYPE, SpaceAllocator.SpaceType.OFFHEAP.name());
+		SpaceAllocator spaceAllocator2 = new SpaceAllocator(configuration, null);
 		Assert.assertTrue(spaceAllocator2.getChunkAllocator() instanceof DirectBufferChunkAllocator);
-		Assert.assertEquals(0, spaceAllocator2.getChunkIdGenerator().get());
-		spaceAllocator2.allocate(12);
 		spaceAllocator2.close();
 	}
 
 	@Test
 	public void testNormal() throws Exception {
 		int chunkSize = 64 * 1024 * 1024;
-		SpaceConfiguration spaceConfiguration =
-			new SpaceConfiguration(chunkSize, false, ChunkAllocator.SpaceType.HEAP);
-		TestChunkAllocator chunkAllocator = new TestChunkAllocator(spaceConfiguration);
-		SpaceAllocator spaceAllocator = new SpaceAllocator(spaceConfiguration, chunkAllocator);
+
+		TestChunkAllocator chunkAllocator = new TestChunkAllocator(chunkSize);
+		SpaceAllocator spaceAllocator = new SpaceAllocator(chunkAllocator);
 
 		// allocate normal space
 		long offset0 = spaceAllocator.allocate(1);
@@ -144,10 +142,8 @@ public class SpaceAllocatorTest extends TestLogger {
 	@Test
 	public void testExpand() throws Exception {
 		int chunkSize = 1024;
-		SpaceConfiguration spaceConfiguration =
-			new SpaceConfiguration(chunkSize, false, ChunkAllocator.SpaceType.HEAP);
-		TestChunkAllocator chunkAllocator = new TestChunkAllocator(spaceConfiguration);
-		SpaceAllocator spaceAllocator = new SpaceAllocator(spaceConfiguration, chunkAllocator);
+		TestChunkAllocator chunkAllocator = new TestChunkAllocator(chunkSize);
+		SpaceAllocator spaceAllocator = new SpaceAllocator(chunkAllocator);
 		spaceAllocator.addTotalSpace(new TestChunk(0, chunkSize), 0);
 		spaceAllocator.addTotalSpace(new TestChunk(16, chunkSize), 16);
 		Assert.assertEquals(0, spaceAllocator.getChunkById(0).getChunkId());
@@ -159,10 +155,8 @@ public class SpaceAllocatorTest extends TestLogger {
 	@Test
 	public void testClose() throws Exception {
 		int chunkSize = 1024;
-		SpaceConfiguration spaceConfiguration =
-			new SpaceConfiguration(chunkSize, false, ChunkAllocator.SpaceType.HEAP);
-		TestChunkAllocator chunkAllocator = new TestChunkAllocator(spaceConfiguration);
-		SpaceAllocator spaceAllocator = new SpaceAllocator(spaceConfiguration, chunkAllocator);
+		TestChunkAllocator chunkAllocator = new TestChunkAllocator(chunkSize);
+		SpaceAllocator spaceAllocator = new SpaceAllocator(chunkAllocator);
 		Assert.assertFalse(chunkAllocator.closed);
 
 		spaceAllocator.close();
@@ -174,8 +168,8 @@ public class SpaceAllocatorTest extends TestLogger {
 		int chunkSize;
 		boolean closed;
 
-		TestChunkAllocator(SpaceConfiguration spaceConfiguration) {
-			this.chunkSize = spaceConfiguration.getChunkSize();
+		TestChunkAllocator(int chunkSize) {
+			this.chunkSize = chunkSize;
 			this.closed = false;
 		}
 

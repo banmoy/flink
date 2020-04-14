@@ -24,13 +24,25 @@ import org.apache.flink.runtime.state.StateBackendTestBase;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 
 import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+
+import java.io.IOException;
 
 public class SpillableStateBackendTest extends StateBackendTestBase<SpillableStateBackend> {
 
+	@Rule
+	public final TemporaryFolder tempFolder = new TemporaryFolder();
+
 	@Override
-	protected SpillableStateBackend getStateBackend() {
-		return new SpillableStateBackend(new MemoryStateBackend(true));
+	protected SpillableStateBackend getStateBackend() throws IOException {
+		SpillableStateBackend backend = new SpillableStateBackend(new MemoryStateBackend(true));
+
+		String dbPath = tempFolder.newFolder().getAbsolutePath();
+		backend.setDbStoragePaths(dbPath);
+
+		return backend;
 	}
 
 	@Override

@@ -26,8 +26,8 @@ import org.apache.flink.core.memory.MemorySegmentFactory;
  */
 class DirectBufferChunkAllocator extends AbstractChunkAllocator {
 
-	DirectBufferChunkAllocator(SpaceConfiguration spaceConfiguration) {
-		super(spaceConfiguration);
+	DirectBufferChunkAllocator(int chunkSize) {
+		super(chunkSize);
 	}
 
 	@Override

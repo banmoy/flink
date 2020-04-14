@@ -25,8 +25,8 @@ import org.apache.flink.core.memory.MemorySegmentFactory;
  */
 class HeapBufferChunkAllocator extends AbstractChunkAllocator {
 
-	HeapBufferChunkAllocator(SpaceConfiguration spaceConfiguration) {
-		super(spaceConfiguration);
+	HeapBufferChunkAllocator(int chunkSize) {
+		super(chunkSize);
 	}
 
 	@Override

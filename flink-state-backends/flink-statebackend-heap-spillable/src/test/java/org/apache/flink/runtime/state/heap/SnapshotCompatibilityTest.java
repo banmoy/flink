@@ -23,6 +23,7 @@ package org.apache.flink.runtime.state.heap;
 import org.apache.flink.api.common.state.StateDescriptor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.memory.ByteArrayInputStreamWithPos;
 import org.apache.flink.core.memory.ByteArrayOutputStreamWithPos;
 import org.apache.flink.core.memory.DataInputViewStreamWrapper;
@@ -34,13 +35,15 @@ import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
 import org.apache.flink.runtime.state.StateEntry;
 import org.apache.flink.runtime.state.StateSnapshot;
 import org.apache.flink.runtime.state.StateSnapshotKeyGroupReader;
-import org.apache.flink.runtime.state.heap.space.ChunkAllocator;
 import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
-import org.apache.flink.runtime.state.heap.space.SpaceConfiguration;
+import org.apache.flink.runtime.state.heap.space.SpaceOptions;
 
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
@@ -52,6 +55,9 @@ import java.util.Random;
 public class SnapshotCompatibilityTest {
 
 	private final TypeSerializer<Integer> keySerializer = IntSerializer.INSTANCE;
+
+	@Rule
+	public final TemporaryFolder tmp = new TemporaryFolder();
 
 	@Test
 	public void checkCompatibleSerializationFormats() throws IOException {
@@ -81,9 +87,9 @@ public class SnapshotCompatibilityTest {
 
 		StateSnapshot snapshot = cowStateTable.stateSnapshot();
 
-		SpaceConfiguration spaceConfiguration =
-			new SpaceConfiguration(256 * 1024 * 1024, false, ChunkAllocator.SpaceType.HEAP);
-		SpaceAllocator spaceAllocator = new SpaceAllocator(spaceConfiguration);
+		Configuration configuration = new Configuration();
+		configuration.set(SpaceOptions.SPACE_TYPE, SpaceAllocator.SpaceType.MMAP.name());
+		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, new File[] {tmp.newFolder()});
 		final SpillableStateTable<Integer, Integer, ArrayList<Integer>> nestedMapsStateTable =
 			new SpillableStateTable<>(keyContext, metaInfo, keySerializer, spaceAllocator);
 

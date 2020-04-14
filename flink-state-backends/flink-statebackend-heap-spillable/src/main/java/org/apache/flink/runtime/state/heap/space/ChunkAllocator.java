@@ -33,32 +33,4 @@ public interface ChunkAllocator extends Closeable {
 	 * @return a chunk.
 	 */
 	Chunk createChunk(int chunkId, AllocateStrategy allocateStrategy);
-
-	/**
-	 * Type of space where to allocate chunks.
-	 */
-	enum SpaceType {
-
-		/**
-		 * Allocates chunks from heap. This is mainly used for test.
-		 */
-		HEAP,
-
-		/**
-		 * Allocates chunks from off-heap.
-		 */
-		OFFHEAP
-	}
-
-	static ChunkAllocator createChunkAllocator(SpaceConfiguration spaceConfiguration) {
-		SpaceType spaceType = spaceConfiguration.getSpaceType();
-		switch (spaceType) {
-			case HEAP:
-				return new HeapBufferChunkAllocator(spaceConfiguration);
-			case OFFHEAP:
-				return new DirectBufferChunkAllocator(spaceConfiguration);
-			default:
-				throw new UnsupportedOperationException("Unsupported space type " + spaceType.name());
-		}
-	}
 }

@@ -30,6 +30,11 @@ public class SpillableStateBackendMigrationTest extends StateBackendMigrationTes
 	@Override
 	protected SpillableStateBackend getStateBackend() throws Exception {
 		File checkpointPath = tempFolder.newFolder();
-		return new SpillableStateBackend(new FsStateBackend(checkpointPath.toURI(), true));
+		SpillableStateBackend backend = new SpillableStateBackend(new FsStateBackend(checkpointPath.toURI(), true));
+
+		String dbPath = tempFolder.newFolder().getAbsolutePath();
+		backend.setDbStoragePaths(dbPath);
+
+		return backend;
 	}
 }

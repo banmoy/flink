@@ -58,6 +58,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Implementation of spillable backend restore operation.
+ *
+ * @param <K> The data type that the serializer serializes.
+ */
 public class SpillableHeapRestoreOperation<K> implements RestoreOperation<Void> {
 	private final Collection<KeyedStateHandle> restoreStateHandles;
 	private final StateSerializerProvider<K> keySerializerProvider;
@@ -247,7 +252,7 @@ public class SpillableHeapRestoreOperation<K> implements RestoreOperation<Void> 
 				"Unexpected key-group in restore.");
 
 			try (InputStream kgCompressionInStream =
-					 streamCompressionDecorator.decorateWithCompression(fsDataInputStream)) {
+					streamCompressionDecorator.decorateWithCompression(fsDataInputStream)) {
 
 				readKeyGroupStateData(
 					kgCompressionInStream,

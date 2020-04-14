@@ -23,13 +23,13 @@ package org.apache.flink.runtime.state.heap;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
 import org.apache.flink.runtime.checkpoint.StateObjectCollection;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
 import org.apache.flink.runtime.state.AbstractKeyedStateBackend;
 import org.apache.flink.runtime.state.AbstractStateBackend;
-import org.apache.flink.runtime.state.BackendBuildingException;
 import org.apache.flink.runtime.state.CheckpointStreamFactory;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.state.KeyedStateHandle;
@@ -47,8 +47,11 @@ import org.apache.flink.util.TestLogger;
 
 import org.apache.commons.io.IOUtils;
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
+import java.io.File;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.RunnableFuture;
@@ -57,8 +60,11 @@ import static org.mockito.Mockito.mock;
 
 public class SpillableStateSnapshotCompressionTest  extends TestLogger {
 
+	@Rule
+	public final TemporaryFolder tempFolder = new TemporaryFolder();
+
 	@Test
-	public void testCompressionConfiguration() throws BackendBuildingException {
+	public void testCompressionConfiguration() throws Exception {
 
 		ExecutionConfig executionConfig = new ExecutionConfig();
 		executionConfig.setUseSnapshotCompression(true);
@@ -100,14 +106,14 @@ public class SpillableStateSnapshotCompressionTest  extends TestLogger {
 	}
 
 	private SpillableKeyedStateBackend<String> getStringHeapKeyedStateBackend(ExecutionConfig executionConfig)
-		throws BackendBuildingException {
+		throws Exception {
 		return getStringHeapKeyedStateBackend(executionConfig, Collections.emptyList());
 	}
 
 	private SpillableKeyedStateBackend<String> getStringHeapKeyedStateBackend(
 		ExecutionConfig executionConfig,
 		Collection<KeyedStateHandle> stateHandles)
-		throws BackendBuildingException {
+		throws Exception {
 		return new SpillableKeyedStateBackendBuilder<>(
 			mock(TaskKvStateRegistry.class),
 			StringSerializer.INSTANCE,
@@ -121,7 +127,9 @@ public class SpillableStateSnapshotCompressionTest  extends TestLogger {
 			TestLocalRecoveryConfig.disabled(),
 			mock(HeapPriorityQueueSetFactory.class),
 			true,
-			new CloseableRegistry()).build();
+			new CloseableRegistry(),
+			new Configuration(),
+			new File[] {tempFolder.newFolder()}).build();
 	}
 
 	private void snapshotRestoreRoundtrip(boolean useCompression) throws Exception {

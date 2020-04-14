@@ -24,6 +24,7 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.CloseableRegistry;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
@@ -48,9 +49,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
 
 public class SpillableStateBackend extends AbstractStateBackend implements ConfigurableStateBackend {
 
@@ -60,6 +67,20 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 
 	/** The state backend that we use for creating checkpoint streams. */
 	private final StateBackend checkpointStreamBackend;
+
+	private Configuration configuration = new Configuration();
+
+	/** Whether we already lazily initialized our local storage directories. */
+	private transient boolean isInitialized;
+
+	/** Base paths for directory, as configured.
+	 * Null if not yet set, in which case the configuration values will be used.
+	 * The configuration defaults to the TaskManager's temp directories. */
+	@Nullable
+	private File[] localDirectories;
+
+	/** Base paths for mmap directory, as initialized. */
+	private transient File[] initializedBasePaths;
 
 	public SpillableStateBackend(String checkpointDataUri) throws IOException {
 		this(new FsStateBackend(checkpointDataUri));
@@ -75,6 +96,10 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 		this.checkpointStreamBackend = originalStreamBackend instanceof ConfigurableStateBackend
 			? ((ConfigurableStateBackend) originalStreamBackend).configure(config, classLoader)
 			: originalStreamBackend;
+
+		this.configuration = new Configuration();
+		this.configuration.addAll(config);
+		this.configuration.addAll(original.configuration);
 	}
 
 	@Override
@@ -100,6 +125,8 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 		@Nonnull Collection<KeyedStateHandle> stateHandles,
 		CloseableRegistry cancelStreamRegistry) throws IOException {
 
+		lazyInitializeForJob(env, operatorIdentifier);
+
 		TaskStateManager taskStateManager = env.getTaskStateManager();
 		LocalRecoveryConfig localRecoveryConfig = taskStateManager.createLocalRecoveryConfig();
 		HeapPriorityQueueSetFactory priorityQueueSetFactory =
@@ -118,7 +145,9 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 			localRecoveryConfig,
 			priorityQueueSetFactory,
 			false,
-			cancelStreamRegistry).build();
+			cancelStreamRegistry,
+			configuration,
+			initializedBasePaths).build();
 	}
 
 	@Override
@@ -146,4 +175,131 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 	public CheckpointStorage createCheckpointStorage(JobID jobId) throws IOException {
 		return checkpointStreamBackend.createCheckpointStorage(jobId);
 	}
+
+	/**
+	 * Sets the directories which store mmap files. These directories do not need to be
+	 * persistent, they can be ephemeral, meaning that they are lost on a machine failure,
+	 * because state is persisted in checkpoints.
+	 *
+	 * <p>If nothing is configured, these directories default to the TaskManager's local
+	 * temporary file directories.
+	 *
+	 * <p>Each keyed state backend will store their files on different paths.
+	 *
+	 * <p>Passing {@code null} to this function restores the default behavior, where the configured
+	 * temp directories will be used.
+	 *
+	 * @param paths The paths across which store mmap files.
+	 */
+	public void setDbStoragePaths(String... paths) {
+		if (paths == null) {
+			localDirectories = null;
+		}
+		else if (paths.length == 0) {
+			throw new IllegalArgumentException("empty paths");
+		}
+		else {
+			File[] pp = new File[paths.length];
+
+			for (int i = 0; i < paths.length; i++) {
+				final String rawPath = paths[i];
+				final String path;
+
+				if (rawPath == null) {
+					throw new IllegalArgumentException("null path");
+				}
+				else {
+					// we need this for backwards compatibility, to allow URIs like 'file:///'...
+					URI uri = null;
+					try {
+						uri = new Path(rawPath).toUri();
+					}
+					catch (Exception e) {
+						// cannot parse as a path
+					}
+
+					if (uri != null && uri.getScheme() != null) {
+						if ("file".equalsIgnoreCase(uri.getScheme())) {
+							path = uri.getPath();
+						}
+						else {
+							throw new IllegalArgumentException("Path " + rawPath + " has a non-local scheme");
+						}
+					}
+					else {
+						path = rawPath;
+					}
+				}
+
+				pp[i] = new File(path);
+				if (!pp[i].isAbsolute()) {
+					throw new IllegalArgumentException("Relative paths are not supported");
+				}
+			}
+
+			localDirectories = pp;
+		}
+	}
+
+	/**
+	 * Gets the configured local storage paths, or null, if none were configured.
+	 *
+	 * <p>If nothing is configured, these directories default to the TaskManager's local
+	 * temporary file directories.
+	 */
+	public String[] getDbStoragePaths() {
+		if (localDirectories == null) {
+			return null;
+		} else {
+			String[] paths = new String[localDirectories.length];
+			for (int i = 0; i < paths.length; i++) {
+				paths[i] = localDirectories[i].toString();
+			}
+			return paths;
+		}
+	}
+
+	private void lazyInitializeForJob(
+		Environment env,
+		@SuppressWarnings("unused") String operatorIdentifier) throws IOException {
+
+		if (isInitialized) {
+			return;
+		}
+
+		JobID jobId = env.getJobID();
+
+		// initialize the paths where the local RocksDB files should be stored
+		if (localDirectories == null) {
+			// initialize from the temp directories
+			initializedBasePaths = env.getIOManager().getSpillingDirectories();
+		}
+		else {
+			List<File> dirs = new ArrayList<>(localDirectories.length);
+			StringBuilder errorMessage = new StringBuilder();
+
+			for (File f : localDirectories) {
+				File testDir = new File(f, UUID.randomUUID().toString());
+				if (!testDir.mkdirs()) {
+					String msg = "Local files directory '" + f
+						+ "' does not exist and cannot be created. ";
+					LOG.error(msg);
+					errorMessage.append(msg);
+				} else {
+					dirs.add(f);
+				}
+				//noinspection ResultOfMethodCallIgnored
+				testDir.delete();
+			}
+
+			if (dirs.isEmpty()) {
+				throw new IOException("No local storage directories available. " + errorMessage);
+			} else {
+				initializedBasePaths = dirs.toArray(new File[dirs.size()]);
+			}
+		}
+
+		isInitialized = true;
+	}
+
 }

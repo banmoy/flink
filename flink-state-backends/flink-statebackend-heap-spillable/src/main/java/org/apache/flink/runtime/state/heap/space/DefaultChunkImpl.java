@@ -37,7 +37,7 @@ public class DefaultChunkImpl extends AbstractChunk {
 	 */
 	private final BucketAllocator bucketAllocator;
 
-	DefaultChunkImpl(int chunkId, MemorySegment memorySegment, AllocateStrategy allocateStrategy) {
+	public DefaultChunkImpl(int chunkId, MemorySegment memorySegment, AllocateStrategy allocateStrategy) {
 		super(chunkId, memorySegment.size());
 		this.memorySegment = memorySegment;
 		switch (allocateStrategy) {

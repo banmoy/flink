@@ -19,8 +19,15 @@
 package org.apache.flink.runtime.state.heap.space;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.state.heap.space.mmap.MmapChunkAllocator;
+import org.apache.flink.util.MathUtils;
 import org.apache.flink.util.Preconditions;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,9 +42,6 @@ import static org.apache.flink.runtime.state.heap.space.SpaceConstants.NO_SPACE;
  * An implementation of {@link Allocator} which is not thread safe.
  */
 public class SpaceAllocator implements Allocator {
-
-	/** Configuration for space. */
-	private final SpaceConfiguration spaceConfiguration;
 
 	/**
 	 * Array of all chunks.
@@ -64,24 +68,13 @@ public class SpaceAllocator implements Allocator {
 	 */
 	private final ChunkAllocator chunkAllocator;
 
-	public SpaceAllocator(SpaceConfiguration configuration) {
-		this.spaceConfiguration = Preconditions.checkNotNull(configuration);
-		this.chunkAllocator = ChunkAllocator.createChunkAllocator(spaceConfiguration);
-		if (spaceConfiguration.isPreAllocate()) {
-			init();
-		}
+	public SpaceAllocator(Configuration configuration, @Nullable File[] localDirs) {
+		this.chunkAllocator = createChunkAllocator(configuration, localDirs);
 	}
 
 	@VisibleForTesting
-	SpaceAllocator(SpaceConfiguration configuration, ChunkAllocator chunkAllocator) {
-		this.spaceConfiguration = Preconditions.checkNotNull(configuration);
+	SpaceAllocator(ChunkAllocator chunkAllocator) {
 		this.chunkAllocator = Preconditions.checkNotNull(chunkAllocator);
-	}
-
-	private void init() {
-		Chunk chunk = createChunk(AllocateStrategy.SmallBucket);
-		totalSpaceForNormal.add(chunk);
-		addTotalSpace(chunk, chunk.getChunkId());
 	}
 
 	@VisibleForTesting
@@ -154,5 +147,47 @@ public class SpaceAllocator implements Allocator {
 	@VisibleForTesting
 	AtomicInteger getChunkIdGenerator() {
 		return chunkIdGenerator;
+	}
+
+
+	/**
+	 * Type of space where to allocate chunks.
+	 */
+	public enum SpaceType {
+
+		/**
+		 * Allocates chunks from heap. This is mainly used for test.
+		 */
+		HEAP,
+
+		/**
+		 * Allocates chunks from off-heap.
+		 */
+		OFFHEAP,
+
+		/**
+		 * Allocates chunks from mmp.
+		 */
+		MMAP
+	}
+
+	private static ChunkAllocator createChunkAllocator(Configuration configuration, @Nullable File[] localDirs) {
+		SpaceType spaceType = SpaceType.valueOf(configuration.get(SpaceOptions.SPACE_TYPE).toUpperCase());
+		long chunkSize = configuration.get(SpaceOptions.CHUNK_SIZE).getBytes();
+		Preconditions.checkArgument(chunkSize <= Integer.MAX_VALUE,
+			"Chunk size should be less than Integer.MAX_VALUE, but is actually %s", chunkSize);
+		Preconditions.checkArgument(MathUtils.isPowerOf2(chunkSize),
+			"Chunk size should be a power of two, but is actually %s", chunkSize);
+
+		switch (spaceType) {
+			case HEAP:
+				return new HeapBufferChunkAllocator((int) chunkSize);
+			case OFFHEAP:
+				return new DirectBufferChunkAllocator((int) chunkSize);
+			case MMAP:
+				return new MmapChunkAllocator((int) chunkSize, localDirs, configuration);
+			default:
+				throw new UnsupportedOperationException("Unsupported space type " + spaceType.name());
+		}
 	}
 }

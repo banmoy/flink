@@ -38,17 +38,18 @@ public abstract class AbstractChunkAllocator implements ChunkAllocator {
 
 	private AtomicBoolean closed;
 
-	AbstractChunkAllocator(SpaceConfiguration spaceConfiguration) {
-		this.chunkSize = spaceConfiguration.getChunkSize();
+	AbstractChunkAllocator(int chunkSize) {
+		this.chunkSize = chunkSize;
 		this.segments = new ArrayList<>();
 		this.closed = new AtomicBoolean(false);
 	}
 
 	@Override
 	public Chunk createChunk(int chunkId, AllocateStrategy allocateStrategy) {
-		MemorySegment segment = allocate(chunkSize);
-		segments.add(segment);
-		return new DefaultChunkImpl(chunkId, segment, allocateStrategy);
+//		MemorySegment segment = allocate(chunkSize);
+//		segments.add(segment);
+//		return new DefaultChunkImpl(chunkId, segment, allocateStrategy);
+		return null;
 	}
 
 	@Override

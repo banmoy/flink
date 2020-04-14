@@ -22,6 +22,7 @@ package org.apache.flink.runtime.state.heap;
 
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
 import org.apache.flink.runtime.state.AbstractKeyedStateBackendBuilder;
@@ -30,14 +31,13 @@ import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.state.KeyedStateHandle;
 import org.apache.flink.runtime.state.LocalRecoveryConfig;
 import org.apache.flink.runtime.state.StreamCompressionDecorator;
-import org.apache.flink.runtime.state.heap.space.ChunkAllocator;
 import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
-import org.apache.flink.runtime.state.heap.space.SpaceConfiguration;
 import org.apache.flink.runtime.state.ttl.TtlTimeProvider;
 import org.apache.flink.util.IOUtils;
 
 import javax.annotation.Nonnull;
 
+import java.io.File;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -56,6 +56,10 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 	 */
 	private final boolean asynchronousSnapshots;
 
+	private final Configuration configuration;
+
+	private final File[] localPaths;
+
 	public SpillableKeyedStateBackendBuilder(
 		TaskKvStateRegistry kvStateRegistry,
 		TypeSerializer<K> keySerializer,
@@ -69,7 +73,9 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		LocalRecoveryConfig localRecoveryConfig,
 		HeapPriorityQueueSetFactory priorityQueueSetFactory,
 		boolean asynchronousSnapshots,
-		CloseableRegistry cancelStreamRegistry) {
+		CloseableRegistry cancelStreamRegistry,
+		Configuration configuration,
+		File[] localPaths) {
 		super(
 			kvStateRegistry,
 			keySerializer,
@@ -84,6 +90,8 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		this.localRecoveryConfig = localRecoveryConfig;
 		this.priorityQueueSetFactory = priorityQueueSetFactory;
 		this.asynchronousSnapshots = asynchronousSnapshots;
+		this.configuration = configuration;
+		this.localPaths = localPaths;
 	}
 
 	@Override
@@ -93,13 +101,9 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		// Map of registered priority queue set states
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates = new HashMap<>();
 
-		// TODO how to build space configuration
-		SpaceConfiguration spaceConfiguration =
-			new SpaceConfiguration(256 * 1024 * 1024, false, ChunkAllocator.SpaceType.HEAP);
-		SpaceAllocator spaceAllocator = new SpaceAllocator(spaceConfiguration);
+		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, localPaths);
 		CloseableRegistry cancelStreamRegistryForBackend = new CloseableRegistry();
 		HeapSnapshotStrategy<K> snapshotStrategy = initSnapshotStrategy(
-			asynchronousSnapshots,
 			registeredKVStates,
 			registeredPQStates,
 			cancelStreamRegistryForBackend,
@@ -140,11 +144,11 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 			priorityQueueSetFactory,
 			snapshotStrategy,
 			keyContext,
-			spaceAllocator);
+			spaceAllocator,
+			localPaths);
 	}
 
 	private HeapSnapshotStrategy<K> initSnapshotStrategy(
-		boolean asynchronousSnapshots,
 		Map<String, StateTable<K, ?, ?>> registeredKVStates,
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates,
 		CloseableRegistry cancelStreamRegistry,
