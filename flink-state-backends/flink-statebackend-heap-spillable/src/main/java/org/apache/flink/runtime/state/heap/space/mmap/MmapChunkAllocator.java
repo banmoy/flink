@@ -26,7 +26,7 @@ import org.apache.flink.runtime.state.heap.space.AllocateStrategy;
 import org.apache.flink.runtime.state.heap.space.Chunk;
 import org.apache.flink.runtime.state.heap.space.ChunkAllocator;
 import org.apache.flink.runtime.state.heap.space.DefaultChunkImpl;
-import org.apache.flink.runtime.state.heap.space.SpaceOptions;
+import org.apache.flink.runtime.state.heap.SpillableOptions;
 import org.apache.flink.util.FileUtils;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.IOUtils;
@@ -82,7 +82,7 @@ public class MmapChunkAllocator implements ChunkAllocator {
 	public MmapChunkAllocator(int chunkSize, File[] localDirs, Configuration configuration) {
 		this.chunkSize = chunkSize;
 
-		this.maxMmapFiles = configuration.get(SpaceOptions.MAX_MMAP_FILES);
+		this.maxMmapFiles = configuration.get(SpillableOptions.MAX_MMAP_FILES);
 		Preconditions.checkArgument(maxMmapFiles >= 0, "Max mmap files must be" +
 			" non-negative, but actually {}", maxMmapFiles);
 

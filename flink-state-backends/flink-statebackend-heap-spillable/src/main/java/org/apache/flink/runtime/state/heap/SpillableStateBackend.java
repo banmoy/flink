@@ -125,6 +125,7 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 		@Nonnull Collection<KeyedStateHandle> stateHandles,
 		CloseableRegistry cancelStreamRegistry) throws IOException {
 
+		initHeapStatusMonitor();
 		lazyInitializeForJob(env, operatorIdentifier);
 
 		TaskStateManager taskStateManager = env.getTaskStateManager();
@@ -267,8 +268,6 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 			return;
 		}
 
-		JobID jobId = env.getJobID();
-
 		// initialize the paths where the local RocksDB files should be stored
 		if (localDirectories == null) {
 			// initialize from the temp directories
@@ -302,4 +301,10 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 		isInitialized = true;
 	}
 
+	private void initHeapStatusMonitor() {
+		long checkInterval = configuration.get(SpillableOptions.HEAP_STATUS_CHECK_INTERVAL);
+		Preconditions.checkArgument(checkInterval > 0,
+			"Heap status check interval should be larger than 0.");
+		HeapStatusMonitor.initStatusMonitor(checkInterval);
+	}
 }

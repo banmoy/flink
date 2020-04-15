@@ -21,6 +21,7 @@ package org.apache.flink.runtime.state.heap.space;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.core.memory.MemorySegment;
+import org.apache.flink.runtime.state.heap.SpillableOptions;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.TestLogger;
 
@@ -41,16 +42,16 @@ public class SpaceAllocatorTest extends TestLogger {
 	public void testConstruct() throws Exception {
 		int chunkSize = 64 * 1024 * 1024;
 		Configuration configuration = new Configuration();
-		configuration.set(SpaceOptions.CHUNK_SIZE, new MemorySize(chunkSize));
+		configuration.set(SpillableOptions.CHUNK_SIZE, new MemorySize(chunkSize));
 
 		// construct heap space allocator with preallocate
-		configuration.set(SpaceOptions.SPACE_TYPE, SpaceAllocator.SpaceType.HEAP.name());
+		configuration.set(SpillableOptions.SPACE_TYPE, SpaceAllocator.SpaceType.HEAP.name());
 		SpaceAllocator spaceAllocator1 = new SpaceAllocator(configuration, null);
 		Assert.assertTrue(spaceAllocator1.getChunkAllocator() instanceof HeapBufferChunkAllocator);
 		spaceAllocator1.close();
 
 		// construct off-heap space allocator without preallocate
-		configuration.set(SpaceOptions.SPACE_TYPE, SpaceAllocator.SpaceType.OFFHEAP.name());
+		configuration.set(SpillableOptions.SPACE_TYPE, SpaceAllocator.SpaceType.OFFHEAP.name());
 		SpaceAllocator spaceAllocator2 = new SpaceAllocator(configuration, null);
 		Assert.assertTrue(spaceAllocator2.getChunkAllocator() instanceof DirectBufferChunkAllocator);
 		spaceAllocator2.close();

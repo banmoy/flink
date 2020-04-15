@@ -20,11 +20,11 @@ package org.apache.flink.runtime.state.heap.space;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.state.heap.SpillableOptions;
 import org.apache.flink.runtime.state.heap.space.mmap.MmapChunkAllocator;
 import org.apache.flink.util.MathUtils;
 import org.apache.flink.util.Preconditions;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.File;
@@ -172,8 +172,8 @@ public class SpaceAllocator implements Allocator {
 	}
 
 	private static ChunkAllocator createChunkAllocator(Configuration configuration, @Nullable File[] localDirs) {
-		SpaceType spaceType = SpaceType.valueOf(configuration.get(SpaceOptions.SPACE_TYPE).toUpperCase());
-		long chunkSize = configuration.get(SpaceOptions.CHUNK_SIZE).getBytes();
+		SpaceType spaceType = SpaceType.valueOf(configuration.get(SpillableOptions.SPACE_TYPE).toUpperCase());
+		long chunkSize = configuration.get(SpillableOptions.CHUNK_SIZE).getBytes();
 		Preconditions.checkArgument(chunkSize <= Integer.MAX_VALUE,
 			"Chunk size should be less than Integer.MAX_VALUE, but is actually %s", chunkSize);
 		Preconditions.checkArgument(MathUtils.isPowerOf2(chunkSize),

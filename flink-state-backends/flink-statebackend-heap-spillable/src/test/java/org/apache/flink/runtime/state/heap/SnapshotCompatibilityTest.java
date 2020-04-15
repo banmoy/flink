@@ -36,7 +36,6 @@ import org.apache.flink.runtime.state.StateEntry;
 import org.apache.flink.runtime.state.StateSnapshot;
 import org.apache.flink.runtime.state.StateSnapshotKeyGroupReader;
 import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
-import org.apache.flink.runtime.state.heap.space.SpaceOptions;
 
 import org.junit.Assert;
 import org.junit.Rule;
@@ -88,7 +87,7 @@ public class SnapshotCompatibilityTest {
 		StateSnapshot snapshot = cowStateTable.stateSnapshot();
 
 		Configuration configuration = new Configuration();
-		configuration.set(SpaceOptions.SPACE_TYPE, SpaceAllocator.SpaceType.MMAP.name());
+		configuration.set(SpillableOptions.SPACE_TYPE, SpaceAllocator.SpaceType.MMAP.name());
 		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, new File[] {tmp.newFolder()});
 		final SpillableStateTable<Integer, Integer, ArrayList<Integer>> nestedMapsStateTable =
 			new SpillableStateTable<>(keyContext, metaInfo, keySerializer, spaceAllocator);
