@@ -63,7 +63,7 @@ public class SnapshotCompatibilityTest {
 		final Random r = new Random(42);
 		RegisteredKeyValueStateBackendMetaInfo<Integer, ArrayList<Integer>> metaInfo =
 			new RegisteredKeyValueStateBackendMetaInfo<>(
-				StateDescriptor.Type.UNKNOWN,
+				StateDescriptor.Type.VALUE,
 				"test",
 				IntSerializer.INSTANCE,
 				new ArrayListSerializer<>(IntSerializer.INSTANCE));

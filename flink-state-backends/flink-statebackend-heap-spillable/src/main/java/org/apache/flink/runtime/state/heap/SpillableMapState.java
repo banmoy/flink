@@ -88,32 +88,61 @@ public class SpillableMapState<K, N, UK, UV>
 	@Override
 	public void put(UK userKey, UV userValue) {
 
-		Map<UK, UV> userMap = stateTable.get(currentNamespace);
+		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
+		final N namespace = currentNamespace;
+		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
+
+		Map<UK, UV> userMap = stateMap.get(key, namespace);
 		if (userMap == null) {
 			userMap = new HashMap<>();
 		}
 
 		userMap.put(userKey, userValue);
-		stateTable.put(currentNamespace, userMap);
+
+		if (stateMap instanceof CopyOnWriteSkipListStateMap) {
+			stateMap.put(key, namespace, userMap);
+		}
+
+		spillableStateTable.updateStateEstimate(namespace, userMap);
 	}
 
 	@Override
 	public void putAll(Map<UK, UV> value) {
 
-		Map<UK, UV> userMap = stateTable.get(currentNamespace);
+		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
+		final N namespace = currentNamespace;
+		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
+
+		Map<UK, UV> userMap = stateMap.get(key, namespace);
 
 		if (userMap == null) {
 			userMap = new HashMap<>();
 		}
 
 		userMap.putAll(value);
-		stateTable.put(currentNamespace, userMap);
+
+		if (stateMap instanceof CopyOnWriteSkipListStateMap) {
+			stateMap.put(key, namespace, userMap);
+		}
+
+		spillableStateTable.updateStateEstimate(namespace, userMap);
 	}
 
 	@Override
 	public void remove(UK userKey) {
 
-		Map<UK, UV> userMap = stateTable.get(currentNamespace);
+		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
+		final N namespace = currentNamespace;
+		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
+
+		Map<UK, UV> userMap = stateMap.get(key, namespace);
+
 		if (userMap == null) {
 			return;
 		}
@@ -123,7 +152,9 @@ public class SpillableMapState<K, N, UK, UV>
 		if (userMap.isEmpty()) {
 			clear();
 		} else {
-			stateTable.put(currentNamespace, userMap);
+			if (stateMap instanceof CopyOnWriteSkipListStateMap) {
+				stateMap.put(key, namespace, userMap);
+			}
 		}
 	}
 
@@ -135,88 +166,121 @@ public class SpillableMapState<K, N, UK, UV>
 
 	@Override
 	public Iterable<Map.Entry<UK, UV>> entries() {
-		Map<UK, UV> userMap = stateTable.get(currentNamespace);
+		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
+		final N namespace = currentNamespace;
+		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
+
+		Map<UK, UV> userMap = stateMap.get(key, namespace);
 
 		if (userMap == null) {
 			return null;
 		}
 
-		return new Iterable<Map.Entry<UK, UV>>() {
-			@Override
-			public Iterator<Map.Entry<UK, UV>> iterator() {
-				return new IteratorWrapper(currentNamespace, userMap);
-			}
-		};
+		return stateMap instanceof CopyOnWriteStateMap ? userMap.entrySet() :
+			new Iterable<Map.Entry<UK, UV>>() {
+				@Override
+				public Iterator<Map.Entry<UK, UV>> iterator() {
+					return new IteratorWrapper(currentNamespace, userMap);
+				}
+			};
 	}
 
 	@Override
 	public Iterable<UK> keys() {
-		Map<UK, UV> userMap = stateTable.get(currentNamespace);
+		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
+		final N namespace = currentNamespace;
+		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
+
+		Map<UK, UV> userMap = stateMap.get(key, namespace);
 
 		if (userMap == null) {
 			return null;
 		}
 
-		return new Iterable<UK>() {
-			@Override
-			public Iterator<UK> iterator() {
-				IteratorWrapper iteratorWrapper = new IteratorWrapper(currentNamespace, userMap);
-				return new Iterator<UK>() {
-					@Override
-					public boolean hasNext() {
-						return iteratorWrapper.hasNext();
-					}
+		return stateMap instanceof CopyOnWriteStateMap ? userMap.keySet() :
+			new Iterable<UK>() {
+				@Override
+				public Iterator<UK> iterator() {
+					IteratorWrapper iteratorWrapper = new IteratorWrapper(currentNamespace, userMap);
+					return new Iterator<UK>() {
+						@Override
+						public boolean hasNext() {
+							return iteratorWrapper.hasNext();
+						}
 
-					@Override
-					public UK next() {
-						return iteratorWrapper.next().getKey();
-					}
+						@Override
+						public UK next() {
+							return iteratorWrapper.next().getKey();
+						}
 
-					@Override
-					public void remove() {
-						iteratorWrapper.remove();
-					}
-				};
-			}
-		};
+						@Override
+						public void remove() {
+							iteratorWrapper.remove();
+						}
+					};
+				}
+			};
 	}
 
 	@Override
 	public Iterable<UV> values() {
-		Map<UK, UV> userMap = stateTable.get(currentNamespace);
+		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
+		final N namespace = currentNamespace;
+		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
+
+		Map<UK, UV> userMap = stateMap.get(key, namespace);
 
 		if (userMap == null) {
 			return null;
 		}
 
-		return new Iterable<UV>() {
-			@Override
-			public Iterator<UV> iterator() {
-				IteratorWrapper iteratorWrapper = new IteratorWrapper(currentNamespace, userMap);
-				return new Iterator<UV>() {
-					@Override
-					public boolean hasNext() {
-						return iteratorWrapper.hasNext();
-					}
+		return stateMap instanceof CopyOnWriteStateMap ? userMap.values() :
+			new Iterable<UV>() {
+				@Override
+				public Iterator<UV> iterator() {
+					IteratorWrapper iteratorWrapper = new IteratorWrapper(currentNamespace, userMap);
+					return new Iterator<UV>() {
+						@Override
+						public boolean hasNext() {
+							return iteratorWrapper.hasNext();
+						}
 
-					@Override
-					public UV next() {
-						return iteratorWrapper.next().getValue();
-					}
+						@Override
+						public UV next() {
+							return iteratorWrapper.next().getValue();
+						}
 
-					@Override
-					public void remove() {
-						iteratorWrapper.remove();
-					}
-				};
-			}
-		};
+						@Override
+						public void remove() {
+							iteratorWrapper.remove();
+						}
+					};
+				}
+			};
 	}
 
 	@Override
 	public Iterator<Map.Entry<UK, UV>> iterator() {
-		Map<UK, UV> userMap = stateTable.get(currentNamespace);
-		return userMap == null ? null : new IteratorWrapper(currentNamespace, userMap);
+		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
+		final N namespace = currentNamespace;
+		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
+
+		Map<UK, UV> userMap = stateMap.get(key, namespace);
+
+		if (userMap == null) {
+			return null;
+		}
+
+		return stateMap instanceof CopyOnWriteStateMap ? userMap.entrySet().iterator() :
+			new IteratorWrapper(namespace, userMap);
 	}
 
 	@Override

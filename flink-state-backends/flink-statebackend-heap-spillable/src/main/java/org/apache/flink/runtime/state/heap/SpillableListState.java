@@ -82,16 +82,24 @@ public class SpillableListState<K, N, V> extends AbstractHeapMergingState<K, N, 
 	public void add(V value) {
 		Preconditions.checkNotNull(value, "You cannot add null to a ListState.");
 
+		final SpillableStateTable<K, N, List<V>> spillableStateTable =
+			(SpillableStateTable<K, N, List<V>>) stateTable;
+		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
 		final N namespace = currentNamespace;
+		final StateMap<K, N, List<V>> stateMap = spillableStateTable.getCurrentStateMap();
 
-		final StateTable<K, N, List<V>> map = stateTable;
-		List<V> list = map.get(namespace);
+		List<V> list = stateMap.get(key, namespace);
 
 		if (list == null) {
 			list = new ArrayList<>();
 		}
 		list.add(value);
-		map.put(namespace, list);
+
+		if (stateMap instanceof CopyOnWriteSkipListStateMap) {
+			stateMap.put(key, namespace, list);
+		}
+
+		spillableStateTable.updateStateEstimate(namespace, list);
 	}
 
 	@Override

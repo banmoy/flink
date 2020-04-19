@@ -22,6 +22,9 @@ package org.apache.flink.runtime.state.heap;
 
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
+import org.apache.flink.runtime.state.StateTransformationFunction;
+import org.apache.flink.runtime.state.heap.estimate.StateMemoryEstimator;
+import org.apache.flink.runtime.state.heap.estimate.StateMemoryEstimatorFactory;
 import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
 
 import javax.annotation.Nonnull;
@@ -32,11 +35,26 @@ import java.util.List;
 
 public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements Closeable {
 
+	private static final int DEFAULT_ESTIMATE_SAMPLE_COUNT = 1000;
+
 	private static final int DEFAULT_NUM_KEYS_TO_DELETED_ONE_TIME = 2;
 
 	private static final float DEFAULT_LOGICAL_REMOVE_KEYS_RATIO = 0.2f;
 
 	private SpaceAllocator spaceAllocator;
+
+	private StateMemoryEstimator<K, N, S> stateMemoryEstimator;
+
+	private StateTransformationFunctionWrapper transformationWrapper;
+
+	SpillableStateTable(
+		InternalKeyContext<K> keyContext,
+		RegisteredKeyValueStateBackendMetaInfo<N, S> metaInfo,
+		TypeSerializer<K> keySerializer,
+		SpaceAllocator spaceAllocator) {
+		this(keyContext, metaInfo, keySerializer, spaceAllocator, DEFAULT_ESTIMATE_SAMPLE_COUNT);
+		this.transformationWrapper = new StateTransformationFunctionWrapper();
+	}
 
 	/**
 	 * Constructs a new {@code SpillableStateTable}.
@@ -44,13 +62,15 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 	 * @param keyContext    the key context.
 	 * @param metaInfo      the meta information, including the type serializer for state copy-on-write.
 	 * @param keySerializer the serializer of the key.
+	 * @param spaceAllocator the space allocator.
+	 * @param estimateSampleCount sample count to estimate state memory.
 	 */
 	SpillableStateTable(
 		InternalKeyContext<K> keyContext,
 		RegisteredKeyValueStateBackendMetaInfo<N, S> metaInfo,
 		TypeSerializer<K> keySerializer,
-		SpaceAllocator spaceAllocator
-		) {
+		SpaceAllocator spaceAllocator,
+		int estimateSampleCount) {
 		super(keyContext, metaInfo, keySerializer);
 		this.spaceAllocator = spaceAllocator;
 		for (int i = 0; i < this.keyGroupedStateMaps.length; i++) {
@@ -58,6 +78,7 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 				this.keyGroupedStateMaps[i] = createStateMap();
 			}
 		}
+		this.stateMemoryEstimator = StateMemoryEstimatorFactory.create(keySerializer, metaInfo, estimateSampleCount);
 	}
 
 	@Override
@@ -104,5 +125,67 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 	@Override
 	public void close() {
 		// TODO release resource
+	}
+
+	public InternalKeyContext<K> getInternalKeyContext() {
+		return keyContext;
+	}
+
+	public StateMemoryEstimator<K, N, S> getStateMemoryEstimator() {
+		return stateMemoryEstimator;
+	}
+
+	public void updateStateEstimate(N namespace, S state) {
+		stateMemoryEstimator.updateEstimatedSize(keyContext.getCurrentKey(), namespace, state);
+	}
+
+	public StateMap<K, N, S> getCurrentStateMap() {
+		return getMapForKeyGroup(keyContext.getCurrentKeyGroupIndex());
+	}
+
+	@Override
+	public void put(N namespace, S state) {
+		super.put(namespace, state);
+		updateStateEstimate(namespace, state);
+	}
+
+	@Override
+	public void put(K key, int keyGroup, N namespace, S state) {
+		super.put(key, keyGroup, namespace, state);
+		stateMemoryEstimator.updateEstimatedSize(key, namespace, state);
+	}
+
+	@Override
+	public <T> void transform(
+		N namespace, T value, StateTransformationFunction<S, T> transformation) throws Exception {
+		transformationWrapper.setStateTransformationFunction(namespace, transformation);
+		super.transform(namespace, value, transformationWrapper);
+	}
+
+	class StateTransformationFunctionWrapper<T> implements StateTransformationFunction<S, T> {
+
+		private N namespace;
+		private StateTransformationFunction<S, T> stateTransformationFunction;
+
+		public StateTransformationFunction<S, T> getStateTransformationFunction() {
+			return stateTransformationFunction;
+		}
+
+		public void setStateTransformationFunction(
+			N namespace,
+			StateTransformationFunction<S, T> stateTransformationFunction) {
+			this.namespace = namespace;
+			this.stateTransformationFunction = stateTransformationFunction;
+		}
+
+		@Override
+		public S apply(S previousState, T value) throws Exception {
+			S newState = stateTransformationFunction.apply(previousState, value);
+			if (newState != null) {
+				updateStateEstimate(namespace, newState);
+			}
+
+			return newState;
+		}
 	}
 }
