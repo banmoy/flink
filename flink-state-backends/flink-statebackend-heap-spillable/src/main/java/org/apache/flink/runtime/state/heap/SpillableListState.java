@@ -90,12 +90,14 @@ public class SpillableListState<K, N, V> extends AbstractHeapMergingState<K, N, 
 
 		List<V> list = stateMap.get(key, namespace);
 
+		boolean exist = true;
 		if (list == null) {
 			list = new ArrayList<>();
+			exist = false;
 		}
 		list.add(value);
 
-		if (stateMap instanceof CopyOnWriteSkipListStateMap) {
+		if (!exist || stateMap instanceof CopyOnWriteSkipListStateMap) {
 			stateMap.put(key, namespace, list);
 		}
 

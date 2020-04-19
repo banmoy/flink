@@ -46,7 +46,7 @@ public class SpillableStateTableSnapshot<K, N, S> extends AbstractStateTableSnap
 	 * Snapshots of state partitioned by key-group.
 	 */
 	@Nonnull
-	private final List<CopyOnWriteSkipListStateMapSnapshot<K, N, S>> stateMapSnapshots;
+	private final List<StateMapSnapshot<K, N, S, ? extends StateMap<K, N, S>>> stateMapSnapshots;
 
 	/**
 	 * Creates a new {@link CopyOnWriteSkipListStateMapSnapshot}.
@@ -72,7 +72,7 @@ public class SpillableStateTableSnapshot<K, N, S> extends AbstractStateTableSnap
 	@Override
 	protected StateMapSnapshot<K, N, S, ? extends StateMap<K, N, S>> getStateMapSnapshotForKeyGroup(int keyGroup) {
 		int indexOffset = keyGroup - keyGroupOffset;
-		CopyOnWriteSkipListStateMapSnapshot<K, N, S> stateMapSnapshot = null;
+		StateMapSnapshot<K, N, S, ? extends StateMap<K, N, S>> stateMapSnapshot = null;
 		if (indexOffset >= 0 && indexOffset < stateMapSnapshots.size()) {
 			stateMapSnapshot = stateMapSnapshots.get(indexOffset);
 		}
@@ -82,10 +82,8 @@ public class SpillableStateTableSnapshot<K, N, S> extends AbstractStateTableSnap
 
 	@Override
 	public void release() {
-		for (CopyOnWriteSkipListStateMapSnapshot snapshot : stateMapSnapshots) {
-			if (!snapshot.isReleased()) {
-				snapshot.release();
-			}
+		for (StateMapSnapshot snapshot : stateMapSnapshots) {
+			snapshot.release();
 		}
 	}
 }

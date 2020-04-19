@@ -95,13 +95,16 @@ public class SpillableMapState<K, N, UK, UV>
 		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
 
 		Map<UK, UV> userMap = stateMap.get(key, namespace);
+
+		boolean exist = true;
 		if (userMap == null) {
 			userMap = new HashMap<>();
+			exist = false;
 		}
 
 		userMap.put(userKey, userValue);
 
-		if (stateMap instanceof CopyOnWriteSkipListStateMap) {
+		if (!exist || stateMap instanceof CopyOnWriteSkipListStateMap) {
 			stateMap.put(key, namespace, userMap);
 		}
 
@@ -119,13 +122,15 @@ public class SpillableMapState<K, N, UK, UV>
 
 		Map<UK, UV> userMap = stateMap.get(key, namespace);
 
+		boolean exist = true;
 		if (userMap == null) {
 			userMap = new HashMap<>();
+			exist = false;
 		}
 
 		userMap.putAll(value);
 
-		if (stateMap instanceof CopyOnWriteSkipListStateMap) {
+		if (!exist || stateMap instanceof CopyOnWriteSkipListStateMap) {
 			stateMap.put(key, namespace, userMap);
 		}
 

@@ -22,10 +22,16 @@ package org.apache.flink.runtime.state.heap;
 
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
+import org.apache.flink.runtime.state.StateEntry;
 import org.apache.flink.runtime.state.StateTransformationFunction;
 import org.apache.flink.runtime.state.heap.estimate.StateMemoryEstimator;
 import org.apache.flink.runtime.state.heap.estimate.StateMemoryEstimatorFactory;
 import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
+import org.apache.flink.util.IOUtils;
+import org.apache.flink.util.Preconditions;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -33,7 +39,16 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Spillable state table.
+ *
+ * @param <K> type of key
+ * @param <N> type of namespace
+ * @param <S> tyep of state
+ */
 public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements Closeable {
+
+	private static final Logger LOG = LoggerFactory.getLogger(SpillableStateTable.class);
 
 	private static final int DEFAULT_ESTIMATE_SAMPLE_COUNT = 1000;
 
@@ -82,16 +97,21 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 	}
 
 	@Override
-	protected CopyOnWriteSkipListStateMap<K, N, S> createStateMap() {
-		// TODO how to deal with this
-		return spaceAllocator == null ? null :
-			new CopyOnWriteSkipListStateMap<>(
-				getKeySerializer(),
-				getNamespaceSerializer(),
-				getStateSerializer(),
-				spaceAllocator,
-				DEFAULT_NUM_KEYS_TO_DELETED_ONE_TIME,
-				DEFAULT_LOGICAL_REMOVE_KEYS_RATIO);
+	protected StateMap<K, N, S> createStateMap() {
+		return createHashStateMap();
+	}
+
+	private CopyOnWriteStateMap<K, N, S> createHashStateMap() {
+		return new CopyOnWriteStateMap<>(getStateSerializer());
+	}
+
+	private CopyOnWriteSkipListStateMap<K, N, S> createSkipListStateMap() {
+		return new CopyOnWriteSkipListStateMap<>(getKeySerializer(),
+			getNamespaceSerializer(),
+			getStateSerializer(),
+			spaceAllocator,
+			DEFAULT_NUM_KEYS_TO_DELETED_ONE_TIME,
+			DEFAULT_LOGICAL_REMOVE_KEYS_RATIO);
 	}
 
 	// Snapshotting ----------------------------------------------------------------------------------------------------
@@ -113,11 +133,10 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 	}
 
 	@SuppressWarnings("unchecked")
-	List<CopyOnWriteSkipListStateMapSnapshot<K, N, S>> getStateMapSnapshotList() {
-		List<CopyOnWriteSkipListStateMapSnapshot<K, N, S>> snapshotList = new ArrayList<>(keyGroupedStateMaps.length);
+	List<StateMapSnapshot<K, N, S, ? extends StateMap<K, N, S>>> getStateMapSnapshotList() {
+		List<StateMapSnapshot<K, N, S, ? extends StateMap<K, N, S>>> snapshotList = new ArrayList<>(keyGroupedStateMaps.length);
 		for (int i = 0; i < keyGroupedStateMaps.length; i++) {
-			CopyOnWriteSkipListStateMap<K, N, S> stateMap = (CopyOnWriteSkipListStateMap<K, N, S>) keyGroupedStateMaps[i];
-			snapshotList.add(stateMap.stateSnapshot());
+			snapshotList.add(keyGroupedStateMaps[i].stateSnapshot());
 		}
 		return snapshotList;
 	}
@@ -187,5 +206,55 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 
 			return newState;
 		}
+	}
+
+	public void spillState(int keyGroupIndex) {
+		StateMap<K, N, S> stateMap = getMapForKeyGroup(keyGroupIndex);
+		Preconditions.checkState(stateMap instanceof CopyOnWriteStateMap,
+			"Only CopyOnWriteStateMap can be spilled");
+		CopyOnWriteSkipListStateMap<K, N, S> dstStatMap = createSkipListStateMap();
+		try {
+			transferState(stateMap, dstStatMap);
+		} catch (Exception e) {
+			LOG.error("Spill state in keygroup {} failed", keyGroupIndex, e);
+			IOUtils.closeQuietly(dstStatMap);
+			throw e;
+		}
+
+		setMapForKeyGroup(keyGroupIndex, dstStatMap);
+	}
+
+	public void loadState(int keyGroupIndex) {
+		StateMap<K, N, S> stateMap = getMapForKeyGroup(keyGroupIndex);
+		Preconditions.checkState(stateMap instanceof CopyOnWriteSkipListStateMap,
+			"Only CopyOnWriteSkipListStateMap can be loaded");
+
+		CopyOnWriteStateMap<K, N, S> dstStatMap = createHashStateMap();
+		try {
+			transferState(stateMap, dstStatMap);
+		} catch (Exception e) {
+			LOG.error("Load state in keygroup {} failed", keyGroupIndex, e);
+			throw e;
+		}
+
+		setMapForKeyGroup(keyGroupIndex, dstStatMap);
+
+		try {
+			((CopyOnWriteSkipListStateMap) stateMap).close();
+		} catch (Exception e) {
+			LOG.error("Failed to close state map for keygroup {} after load", keyGroupIndex, e);
+			throw e;
+		}
+	}
+
+	private void transferState(StateMap<K, N, S> srcStateMap, StateMap<K, N, S> dstStateMap) {
+		for (StateEntry<K, N, S> entry : srcStateMap) {
+			dstStateMap.put(entry.getKey(), entry.getNamespace(), entry.getState());
+		}
+	}
+
+	private void setMapForKeyGroup(int keyGroupIndex, StateMap<K, N, S> stateMap) {
+		final int pos = indexToOffset(keyGroupIndex);
+		keyGroupedStateMaps[pos] = stateMap;
 	}
 }
