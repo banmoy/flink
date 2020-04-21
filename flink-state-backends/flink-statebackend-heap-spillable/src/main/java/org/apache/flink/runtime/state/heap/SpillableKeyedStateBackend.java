@@ -71,7 +71,8 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 		).collect(Collectors.toMap(t -> t.f0, t -> t.f1));
 
 	private final SpaceAllocator spaceAllocator;
-	private File[] localPaths;
+	private final File[] localPaths;
+	private final SpillAndLoadManager spillAndLoadManager;
 
 	public SpillableKeyedStateBackend(
 		TaskKvStateRegistry kvStateRegistry,
@@ -88,6 +89,7 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 		HeapSnapshotStrategy<K> snapshotStrategy,
 		InternalKeyContext<K> keyContext,
 		SpaceAllocator spaceAllocator,
+		SpillAndLoadManager spillAndLoadManager,
 		File[] localPaths) {
 		super(
 			kvStateRegistry,
@@ -104,6 +106,7 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 			snapshotStrategy,
 			keyContext);
 		this.spaceAllocator = spaceAllocator;
+		this.spillAndLoadManager = spillAndLoadManager;
 		this.localPaths = localPaths;
 	}
 

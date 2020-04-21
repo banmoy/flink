@@ -45,6 +45,8 @@ public class HeapStatusMonitor {
 
 	private static final Logger LOG = LoggerFactory.getLogger(HeapStatusMonitor.class);
 
+	static final long INVAID_MEMORY_SIZE = -1L;
+
 	/** Single instance in a JVM process. */
 	private static HeapStatusMonitor statusMonitor;
 
@@ -52,6 +54,8 @@ public class HeapStatusMonitor {
 	private final long checkIntervalInMs;
 
 	private final MemoryMXBean memoryMXBean;
+
+	private final long maxMemory;
 
 	private final List<GarbageCollectorMXBean> garbageCollectorMXBeans;
 
@@ -84,6 +88,7 @@ public class HeapStatusMonitor {
 		Preconditions.checkArgument(checkIntervalInMs > 0, "Check interval should be positive.");
 		this.checkIntervalInMs = checkIntervalInMs;
 		this.memoryMXBean = ManagementFactory.getMemoryMXBean();
+		this.maxMemory = memoryMXBean.getHeapMemoryUsage().getMax();
 		this.garbageCollectorMXBeans = ManagementFactory.getGarbageCollectorMXBeans();
 		this.memoryPoolMXBeans = new ArrayList<>();
 		for (MemoryPoolMXBean memoryPoolMXBean : ManagementFactory.getMemoryPoolMXBeans()) {
@@ -93,7 +98,7 @@ public class HeapStatusMonitor {
 		}
 		this.resultIdGenerator = new AtomicLong(0L);
 		this.monitorResult = new MonitorResult(System.currentTimeMillis(), resultIdGenerator.getAndIncrement(),
-			memoryMXBean.getHeapMemoryUsage(), 0, 0);
+			memoryMXBean.getHeapMemoryUsage(), 0, INVAID_MEMORY_SIZE);
 		this.lastGcTime = 0L;
 		this.lastGcCount = 0L;
 
@@ -149,8 +154,17 @@ public class HeapStatusMonitor {
 			.reduce(0L, (a, b) -> a + b);
 	}
 
+	public boolean isGarbageCollectionMemoryUsageSupported() {
+		// TODO enable this after make sure how it works
+		return false;
+	}
+
 	public MonitorResult getMonitorResult() {
 		return monitorResult;
+	}
+
+	public long getMaxMemory() {
+		return maxMemory;
 	}
 
 	void shutDown() {

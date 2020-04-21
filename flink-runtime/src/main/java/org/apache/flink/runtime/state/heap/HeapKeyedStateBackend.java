@@ -384,4 +384,8 @@ public class HeapKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
 			TypeSerializer<K> keySerializer) throws Exception;
 	}
 
+	@VisibleForTesting
+	public Map<String, StateTable<K, ?, ?>> getRegisteredKVStates() {
+		return registeredKVStates;
+	}
 }

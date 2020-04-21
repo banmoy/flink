@@ -51,10 +51,6 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 	 * Factory for state that is organized as priority queue.
 	 */
 	private final HeapPriorityQueueSetFactory priorityQueueSetFactory;
-	/**
-	 * Whether asynchronous snapshot is enabled.
-	 */
-	private final boolean asynchronousSnapshots;
 
 	private final Configuration configuration;
 
@@ -72,7 +68,6 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		StreamCompressionDecorator keyGroupCompressionDecorator,
 		LocalRecoveryConfig localRecoveryConfig,
 		HeapPriorityQueueSetFactory priorityQueueSetFactory,
-		boolean asynchronousSnapshots,
 		CloseableRegistry cancelStreamRegistry,
 		Configuration configuration,
 		File[] localPaths) {
@@ -89,7 +84,6 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 			cancelStreamRegistry);
 		this.localRecoveryConfig = localRecoveryConfig;
 		this.priorityQueueSetFactory = priorityQueueSetFactory;
-		this.asynchronousSnapshots = asynchronousSnapshots;
 		this.configuration = configuration;
 		this.localPaths = localPaths;
 	}
@@ -102,12 +96,16 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates = new HashMap<>();
 
 		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, localPaths);
+		SpillAndLoadManager spillAndLoadManager = new SpillAndLoadManager(
+			registeredKVStates,
+			HeapStatusMonitor.getStatusMonitor(), configuration);
 		CloseableRegistry cancelStreamRegistryForBackend = new CloseableRegistry();
 		HeapSnapshotStrategy<K> snapshotStrategy = initSnapshotStrategy(
 			registeredKVStates,
 			registeredPQStates,
 			cancelStreamRegistryForBackend,
-			spaceAllocator);
+			spaceAllocator,
+			spillAndLoadManager);
 		InternalKeyContext<K> keyContext = new InternalKeyContextImpl<>(
 			keyGroupRange,
 			numberOfKeyGroups
@@ -145,6 +143,7 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 			snapshotStrategy,
 			keyContext,
 			spaceAllocator,
+			spillAndLoadManager,
 			localPaths);
 	}
 
@@ -152,10 +151,11 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		Map<String, StateTable<K, ?, ?>> registeredKVStates,
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates,
 		CloseableRegistry cancelStreamRegistry,
-		SpaceAllocator spaceAllocator) {
+		SpaceAllocator spaceAllocator,
+		SpillAndLoadManager spillAndLoadManager) {
 		// TODO whether to support sync strategy
 		SnapshotStrategySynchronicityBehavior<K> synchronicityTrait =
-			new SpillableSnapshotStrategySynchronicityBehavior<>(spaceAllocator);
+			new SpillableSnapshotStrategySynchronicityBehavior<>(spaceAllocator, spillAndLoadManager);
 		return new HeapSnapshotStrategy<>(
 			synchronicityTrait,
 			registeredKVStates,

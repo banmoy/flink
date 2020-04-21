@@ -126,7 +126,6 @@ public class SpillableStateSnapshotCompressionTest  extends TestLogger {
 			AbstractStateBackend.getCompressionDecorator(executionConfig),
 			TestLocalRecoveryConfig.disabled(),
 			mock(HeapPriorityQueueSetFactory.class),
-			true,
 			new CloseableRegistry(),
 			new Configuration(),
 			new File[] {tempFolder.newFolder()}).build();

@@ -38,7 +38,7 @@ public class SpillableStateBackendFactory implements StateBackendFactory<Spillab
 		final String checkpointDirURI = config.getString(CheckpointingOptions.CHECKPOINTS_DIRECTORY);
 		if (checkpointDirURI == null) {
 			throw new IllegalConfigurationException(
-				"Cannot create the Spillable state backend: The configuration does not specify the " +
+				"Cannot createSampleEstimator the Spillable state backend: The configuration does not specify the " +
 					"checkpoint directory '" + CheckpointingOptions.CHECKPOINTS_DIRECTORY.key() + '\'');
 		}
 

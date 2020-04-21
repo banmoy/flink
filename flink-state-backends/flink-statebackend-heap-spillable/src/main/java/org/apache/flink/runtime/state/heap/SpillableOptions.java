@@ -28,13 +28,11 @@ import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
  */
 public class SpillableOptions {
 
-	// options for space allocation.
-
-	/** Type of space used to create chunk. */
+	/** Type of space used to createSampleEstimator chunk. */
 	public static final ConfigOption<String> SPACE_TYPE = ConfigOptions
 		.key("state.backend.spillable.space-type")
 		.defaultValue(SpaceAllocator.SpaceType.MMAP.name())
-		.withDescription(String.format("Type of space used to create chunk. Options are %s (default), %s or %s.",
+		.withDescription(String.format("Type of space used to createSampleEstimator chunk. Options are %s (default), %s or %s.",
 			SpaceAllocator.SpaceType.MMAP.name(), SpaceAllocator.SpaceType.HEAP.name(), SpaceAllocator.SpaceType.OFFHEAP.name()));
 
 	/** Size of chunk. */
@@ -51,12 +49,61 @@ public class SpillableOptions {
 		.defaultValue(Integer.MAX_VALUE)
 		.withDescription("Maximum number of mmap files that can be used.");
 
-	// options for heap status monitor.
-
 	/** Interval to check heap status. */
 	public static final ConfigOption<Long> HEAP_STATUS_CHECK_INTERVAL = ConfigOptions
-		.key("state.backend.heap.status.check-interval")
+		.key("state.backend.spillable.heap-status.check-interval")
 		.longType()
 		.defaultValue(60000L)
 		.withDescription("Interval to check heap status.");
+
+	/** Threshold of gc time to trigger state spill.  */
+	public static final ConfigOption<Long> GC_TIME_THRESHOLD = ConfigOptions
+		.key("state.backend.spillable.gc-time.threshold")
+		.longType()
+		.defaultValue(2000L)
+		.withDescription("If garbage collection time exceeds this threshold, state will be spilled.");
+
+	/** Watermark under JVM heap usage is tried to control. */
+	public static final ConfigOption<Float> HIGH_WARTERMARK_RATIO = ConfigOptions
+		.key("state.backend.spillable.high-watermark.ratio")
+		.floatType()
+		.defaultValue(0.5f)
+		.withDescription("Watermark under which JVM heap usage is tried to control. Note this is not"
+			+ " guaranteed if garbage collection implementation does not provide memory usage after gc.");
+
+	/** Percentage of retained state size to spill in a turn. */
+	public static final ConfigOption<Float> SPILL_SIZE_RATIO = ConfigOptions
+		.key("state.backend.spillable.spill-size.ratio")
+		.floatType()
+		.defaultValue(0.2f)
+		.withDescription("Percentage of retained state size to spill in a turn.");
+
+	/** State load will be triggered if memory usage is under this watermark. */
+	public static final ConfigOption<Float> LOAD_START_RATIO = ConfigOptions
+		.key("state.backend.spillable.load-start.ratio")
+		.floatType()
+		.defaultValue(0.1f)
+		.withDescription("State load will be triggered if memory usage is under this watermark.");
+
+	/** Memory usage can't exceed this watermark after state load. */
+	public static final ConfigOption<Float> LOAD_END_RATIO = ConfigOptions
+		.key("state.backend.spillable.load-end.ratio")
+		.floatType()
+		.defaultValue(0.3f)
+		.withDescription("Memory usage can't exceed this watermark after state load.");
+
+	/** Interval between continuous spill/load.   */
+	public static final ConfigOption<Long> TRIGGER_INTERVAL = ConfigOptions
+		.key("state.backend.spillable.trigger-interval")
+		.longType()
+		.defaultValue(60000L)
+		.withDescription("Interval to trigger continuous spill/load.");
+
+	/** Interval to check resource. */
+	public static final ConfigOption<Long> RESOURCE_CHECK_INTERVAL = ConfigOptions
+		.key("state.backend.spillable.resource-check.interval")
+		.longType()
+		.defaultValue(10000L)
+		.withDescription("Interval to check resource. High frequence will degrade performance but"
+			+ " be more sensitive to memory change.");
 }

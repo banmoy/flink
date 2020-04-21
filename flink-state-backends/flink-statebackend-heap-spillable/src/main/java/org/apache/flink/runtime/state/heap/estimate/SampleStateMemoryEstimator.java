@@ -46,14 +46,18 @@ public class SampleStateMemoryEstimator<K, N, S> implements StateMemoryEstimator
 	@Override
 	public void updateEstimatedSize(K key, N namespace, S state) {
 		if (count++ % sampleCount == 0) {
-			stateMemoryEstimator.updateEstimatedSize(key, namespace, state);
-			totalSize += stateMemoryEstimator.getEstimatedSize();
-			totalNum++;
+			forceUpdateEstimatedSize(key, namespace, state);
 		}
 	}
 
 	@Override
 	public long getEstimatedSize() {
 		return totalNum > 0 ? totalSize / totalNum : -1;
+	}
+
+	public void forceUpdateEstimatedSize(K key, N namespace, S state) {
+		stateMemoryEstimator.updateEstimatedSize(key, namespace, state);
+		totalSize += stateMemoryEstimator.getEstimatedSize();
+		totalNum++;
 	}
 }

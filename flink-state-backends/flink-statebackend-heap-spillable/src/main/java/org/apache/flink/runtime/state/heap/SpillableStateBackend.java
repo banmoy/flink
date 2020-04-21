@@ -145,7 +145,6 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 			AbstractStateBackend.getCompressionDecorator(env.getExecutionConfig()),
 			localRecoveryConfig,
 			priorityQueueSetFactory,
-			false,
 			cancelStreamRegistry,
 			configuration,
 			initializedBasePaths).build();

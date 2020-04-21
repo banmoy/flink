@@ -36,7 +36,7 @@ import static org.apache.flink.runtime.state.heap.space.Constants.FOUR_BYTES_MAR
 
 /**
  * Implementation of {@link Allocator} used for test. This allocator
- * will create a chunk for each allocation request. Size of a chunk
+ * will createSampleEstimator a chunk for each allocation request. Size of a chunk
  * is fixed, and only used by one space.
  */
 public class TestAllocator extends TestLogger implements Allocator {

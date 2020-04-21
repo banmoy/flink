@@ -94,7 +94,7 @@ public class CopyOnWriteSkipListStateMapComplexOpTest extends TestLogger {
 	};
 
 	/**
-	 * We always create a space allocator and state map with some states. Note that Any test case need to test
+	 * We always createSampleEstimator a space allocator and state map with some states. Note that Any test case need to test
 	 * a state map from empty state should not use these pre-created instances.
 	 */
 	private TestAllocator spaceAllocator;
@@ -731,10 +731,10 @@ public class CopyOnWriteSkipListStateMapComplexOpTest extends TestLogger {
 		CopyOnWriteSkipListStateMap<Integer, Long, String> stateMap =
 			createEmptyStateMap(DEFAULT_MAX_KEYS_TO_DELETE_ONE_TIME, 0.0f, spaceAllocator);
 
-		// snapshot order: create snapshot1 -> update states -> create snapshot2 -> update states
-		// -> create snapshot3 -> update states -> complete snapshot2 -> update states -> complete snapshot1
-		// -> create snapshot4 -> update states -> complete snapshot3 -> update states -> complete snapshot4
-		// -> create snapshot5 -> complete snapshot5
+		// snapshot order: createSampleEstimator snapshot1 -> update states -> createSampleEstimator snapshot2 -> update states
+		// -> createSampleEstimator snapshot3 -> update states -> complete snapshot2 -> update states -> complete snapshot1
+		// -> createSampleEstimator snapshot4 -> update states -> complete snapshot3 -> update states -> complete snapshot4
+		// -> createSampleEstimator snapshot5 -> complete snapshot5
 
 		// map to store expected states, namespace -> key -> state
 		Map<Long, Map<Integer, String>> referenceStates = new HashMap<>();
@@ -743,7 +743,7 @@ public class CopyOnWriteSkipListStateMapComplexOpTest extends TestLogger {
 		updateStateForConcurrentSnapshots(referenceStates, stateMap, 0);
 		verifyState(referenceStates, stateMap);
 
-		// create snapshot1
+		// createSampleEstimator snapshot1
 		Map<Long, Map<Integer, String>> expectedSnapshot1 = snapshotReferenceStates(referenceStates);
 		CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot1 = stateMap.stateSnapshot();
 
@@ -751,7 +751,7 @@ public class CopyOnWriteSkipListStateMapComplexOpTest extends TestLogger {
 		updateStateForConcurrentSnapshots(referenceStates, stateMap, 1);
 		verifyState(referenceStates, stateMap);
 
-		// create snapshot2
+		// createSampleEstimator snapshot2
 		Map<Long, Map<Integer, String>> expectedSnapshot2 = snapshotReferenceStates(referenceStates);
 		CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot2 = stateMap.stateSnapshot();
 
@@ -759,7 +759,7 @@ public class CopyOnWriteSkipListStateMapComplexOpTest extends TestLogger {
 		updateStateForConcurrentSnapshots(referenceStates, stateMap, 2);
 		verifyState(referenceStates, stateMap);
 
-		// create snapshot3
+		// createSampleEstimator snapshot3
 		Map<Long, Map<Integer, String>> expectedSnapshot3 = snapshotReferenceStates(referenceStates);
 		CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot3 = stateMap.stateSnapshot();
 
@@ -781,7 +781,7 @@ public class CopyOnWriteSkipListStateMapComplexOpTest extends TestLogger {
 			expectedSnapshot1, snapshot1, keySerializer, namespaceSerializer, stateSerializer);
 		snapshot1.release();
 
-		// create snapshot4
+		// createSampleEstimator snapshot4
 		Map<Long, Map<Integer, String>> expectedSnapshot4 = snapshotReferenceStates(referenceStates);
 		CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot4 = stateMap.stateSnapshot();
 
@@ -805,7 +805,7 @@ public class CopyOnWriteSkipListStateMapComplexOpTest extends TestLogger {
 
 		verifyState(referenceStates, stateMap);
 
-		// create snapshot5
+		// createSampleEstimator snapshot5
 		Map<Long, Map<Integer, String>> expectedSnapshot5 = snapshotReferenceStates(referenceStates);
 		CopyOnWriteSkipListStateMapSnapshot<Integer, Long, String> snapshot5 = stateMap.stateSnapshot();
 

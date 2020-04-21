@@ -115,7 +115,7 @@ public class MmapChunkAllocator implements ChunkAllocator {
 			} else {
 				if (!mmapDir.mkdirs()) {
 					removeCandidateDirectory(mmapDirs);
-					throw new FlinkRuntimeException("Failed to create directory for mmap files: " + mmapDir);
+					throw new FlinkRuntimeException("Failed to createSampleEstimator directory for mmap files: " + mmapDir);
 				}
 			}
 
@@ -166,7 +166,7 @@ public class MmapChunkAllocator implements ChunkAllocator {
 					if (!mmapDir.isValid()) {
 						invalidDirCount++;
 					}
-					LOG.error("Failed to create MemoryMappedByteBuffer under {}", mmapDir.getPath(), e);
+					LOG.error("Failed to createSampleEstimator MemoryMappedByteBuffer under {}", mmapDir.getPath(), e);
 				}
 
 				dirIndex++;
@@ -181,7 +181,7 @@ public class MmapChunkAllocator implements ChunkAllocator {
 			}
 		}
 
-		throw new FlinkRuntimeException("Failed to create chunk because all directories are invalid");
+		throw new FlinkRuntimeException("Failed to createSampleEstimator chunk because all directories are invalid");
 	}
 
 	private Tuple2<RandomAccessFile, MappedByteBuffer> createMemoryMappedByteBuffer(File mmapFile) throws IOException {
@@ -215,7 +215,7 @@ public class MmapChunkAllocator implements ChunkAllocator {
 				MappedByteBuffer buffer = mmapChannel.map(FileChannel.MapMode.READ_WRITE, 0L, chunkSize);
 				return Tuple2.of(mmapRafFile, buffer);
 			} catch (Exception e) {
-				LOG.debug("Failed to create memory mapped byte buffer", e);
+				LOG.debug("Failed to createSampleEstimator memory mapped byte buffer", e);
 
 				if (mmapRafFile != null) {
 					IOUtils.closeQuietly(mmapRafFile);

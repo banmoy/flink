@@ -24,7 +24,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
 import org.apache.flink.runtime.state.StateEntry;
 import org.apache.flink.runtime.state.StateTransformationFunction;
-import org.apache.flink.runtime.state.heap.estimate.StateMemoryEstimator;
+import org.apache.flink.runtime.state.heap.estimate.SampleStateMemoryEstimator;
 import org.apache.flink.runtime.state.heap.estimate.StateMemoryEstimatorFactory;
 import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
 import org.apache.flink.util.IOUtils;
@@ -37,6 +37,7 @@ import javax.annotation.Nonnull;
 
 import java.io.Closeable;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -56,19 +57,24 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 
 	private static final float DEFAULT_LOGICAL_REMOVE_KEYS_RATIO = 0.2f;
 
-	private SpaceAllocator spaceAllocator;
+	private final SpaceAllocator spaceAllocator;
 
-	private StateMemoryEstimator<K, N, S> stateMemoryEstimator;
+	private final SpillAndLoadManager spillAndLoadManager;
 
-	private StateTransformationFunctionWrapper transformationWrapper;
+	private final SampleStateMemoryEstimator<K, N, S> stateMemoryEstimator;
+
+	private final StateTransformationFunctionWrapper transformationWrapper;
+
+	/** Number of requests for each key group. */
+	private final long[] numRequests;
 
 	SpillableStateTable(
 		InternalKeyContext<K> keyContext,
 		RegisteredKeyValueStateBackendMetaInfo<N, S> metaInfo,
 		TypeSerializer<K> keySerializer,
-		SpaceAllocator spaceAllocator) {
-		this(keyContext, metaInfo, keySerializer, spaceAllocator, DEFAULT_ESTIMATE_SAMPLE_COUNT);
-		this.transformationWrapper = new StateTransformationFunctionWrapper();
+		SpaceAllocator spaceAllocator,
+		SpillAndLoadManager spillAndLoadManager) {
+		this(keyContext, metaInfo, keySerializer, spaceAllocator, spillAndLoadManager, DEFAULT_ESTIMATE_SAMPLE_COUNT);
 	}
 
 	/**
@@ -78,22 +84,29 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 	 * @param metaInfo      the meta information, including the type serializer for state copy-on-write.
 	 * @param keySerializer the serializer of the key.
 	 * @param spaceAllocator the space allocator.
-	 * @param estimateSampleCount sample count to estimate state memory.
+	 * @param estimateSampleCount sample numRequests to estimate state memory.
 	 */
 	SpillableStateTable(
 		InternalKeyContext<K> keyContext,
 		RegisteredKeyValueStateBackendMetaInfo<N, S> metaInfo,
 		TypeSerializer<K> keySerializer,
 		SpaceAllocator spaceAllocator,
+		SpillAndLoadManager spillAndLoadManager,
 		int estimateSampleCount) {
 		super(keyContext, metaInfo, keySerializer);
 		this.spaceAllocator = spaceAllocator;
+		this.spillAndLoadManager = spillAndLoadManager;
 		for (int i = 0; i < this.keyGroupedStateMaps.length; i++) {
 			if (keyGroupedStateMaps[i] == null) {
 				this.keyGroupedStateMaps[i] = createStateMap();
 			}
 		}
-		this.stateMemoryEstimator = StateMemoryEstimatorFactory.create(keySerializer, metaInfo, estimateSampleCount);
+		this.stateMemoryEstimator = StateMemoryEstimatorFactory.createSampleEstimator(keySerializer, metaInfo, estimateSampleCount);
+		this.transformationWrapper = new StateTransformationFunctionWrapper();
+		this.numRequests = new long[keyContext.getKeyGroupRange().getNumberOfKeyGroups()];
+		for (int i = 0; i < numRequests.length; i++) {
+			numRequests[i] = 0;
+		}
 	}
 
 	@Override
@@ -150,8 +163,25 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 		return keyContext;
 	}
 
-	public StateMemoryEstimator<K, N, S> getStateMemoryEstimator() {
-		return stateMemoryEstimator;
+	/**
+	 * Return the estimated size of state. When {@param force} is true,
+	 * an estimation will be made if there hasn't been an estimation.
+	 */
+	public long getStateEstimatedSize(boolean force) {
+		long estimatedSize = stateMemoryEstimator.getEstimatedSize();
+		if (estimatedSize == -1 && force) {
+			for (StateMap<K, N, S> stateMap : keyGroupedStateMaps) {
+				if (stateMap.isEmpty()) {
+					continue;
+				}
+				StateEntry<K, N, S> stateEntry = stateMap.iterator().next();
+				stateMemoryEstimator.forceUpdateEstimatedSize(
+					stateEntry.getKey(), stateEntry.getNamespace(), stateEntry.getState());
+			}
+			estimatedSize = stateMemoryEstimator.getEstimatedSize();
+		}
+
+		return estimatedSize;
 	}
 
 	public void updateStateEstimate(N namespace, S state) {
@@ -166,12 +196,14 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 	public void put(N namespace, S state) {
 		super.put(namespace, state);
 		updateStateEstimate(namespace, state);
+		spillAndLoadManager.checkResource();
 	}
 
 	@Override
 	public void put(K key, int keyGroup, N namespace, S state) {
 		super.put(key, keyGroup, namespace, state);
 		stateMemoryEstimator.updateEstimatedSize(key, namespace, state);
+		spillAndLoadManager.checkResource();
 	}
 
 	@Override
@@ -179,6 +211,7 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 		N namespace, T value, StateTransformationFunction<S, T> transformation) throws Exception {
 		transformationWrapper.setStateTransformationFunction(namespace, transformation);
 		super.transform(namespace, value, transformationWrapper);
+		spillAndLoadManager.checkResource();
 	}
 
 	class StateTransformationFunctionWrapper<T> implements StateTransformationFunction<S, T> {
@@ -253,8 +286,98 @@ public class SpillableStateTable<K, N, S> extends StateTable<K, N, S> implements
 		}
 	}
 
+	@Override
+	StateMap<K, N, S> getMapForKeyGroup(int keyGroupIndex) {
+		final int pos = indexToOffset(keyGroupIndex);
+		if (pos >= 0 && pos < keyGroupedStateMaps.length) {
+			numRequests[pos] = numRequests[pos] + 1;
+			return keyGroupedStateMaps[pos];
+		} else {
+			return null;
+		}
+	}
+
 	private void setMapForKeyGroup(int keyGroupIndex, StateMap<K, N, S> stateMap) {
 		final int pos = indexToOffset(keyGroupIndex);
 		keyGroupedStateMaps[pos] = stateMap;
+	}
+
+	public Iterator<StateMapMeta> stateMapIterator() {
+		return new Iterator<StateMapMeta>() {
+			int next = 0;
+
+			@Override
+			public boolean hasNext() {
+				return next < keyGroupedStateMaps.length;
+			}
+
+			@Override
+			public StateMapMeta next() {
+				StateMapMeta stateMapMeta = new StateMapMeta(
+					SpillableStateTable.this,
+					keyGroupedStateMaps[next],
+					next + keyGroupOffset,
+					numRequests[next]);
+				next++;
+				return stateMapMeta;
+			}
+		};
+	}
+
+	/**
+	 * Meta of a {@link StateMap}.
+	 */
+	public static class StateMapMeta {
+
+		private final SpillableStateTable stateTable;
+		private final StateMap stateMap;
+		private final int keyGroupIndex;
+		private final long numRequests;
+		/** Initialize lazily. -1 indicates uninitialized. */
+		private long estimatedMemorySize;
+
+		public StateMapMeta(
+			SpillableStateTable stateTable,
+			StateMap stateMap,
+			int keyGroupIndex,
+			long count) {
+			this.stateTable = stateTable;
+			this.stateMap = stateMap;
+			this.keyGroupIndex = keyGroupIndex;
+			this.numRequests = count;
+			this.estimatedMemorySize = -1;
+		}
+
+		public SpillableStateTable getStateTable() {
+			return stateTable;
+		}
+
+		public StateMap getStateMap() {
+			return stateMap;
+		}
+
+		public boolean isOnHeap() {
+			return stateMap instanceof CopyOnWriteStateMap;
+		}
+
+		public int getSize() {
+			return stateMap.size();
+		}
+
+		public int getKeyGroupIndex() {
+			return keyGroupIndex;
+		}
+
+		public long getNumRequests() {
+			return numRequests;
+		}
+
+		public long getEstimatedMemorySize() {
+			return estimatedMemorySize;
+		}
+
+		public void setEstimatedMemorySize(long estimatedMemorySize) {
+			this.estimatedMemorySize = estimatedMemorySize;
+		}
 	}
 }
