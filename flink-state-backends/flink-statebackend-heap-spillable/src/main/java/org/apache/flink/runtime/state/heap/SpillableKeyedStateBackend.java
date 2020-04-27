@@ -130,6 +130,11 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 	@Override
 	public void dispose() {
 		super.dispose();
+
+		for (StateTable stateTable : getRegisteredKVStates().values()) {
+			IOUtils.closeQuietly((SpillableStateTableImpl) stateTable);
+		}
+
 		// TODO how to safely close space allocator, for example in the case
 		// some snapshots are still use the space
 		IOUtils.closeQuietly(spaceAllocator);

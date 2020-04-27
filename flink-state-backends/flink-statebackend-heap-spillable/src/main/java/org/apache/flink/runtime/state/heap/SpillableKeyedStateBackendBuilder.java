@@ -97,7 +97,7 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 
 		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, localPaths);
 		SpillAndLoadManager spillAndLoadManager = new SpillAndLoadManager(
-			registeredKVStates,
+			new SpillAndLoadManager.StateTableContainerImpl<>(registeredKVStates),
 			HeapStatusMonitor.getStatusMonitor(), configuration);
 		CloseableRegistry cancelStreamRegistryForBackend = new CloseableRegistry();
 		HeapSnapshotStrategy<K> snapshotStrategy = initSnapshotStrategy(

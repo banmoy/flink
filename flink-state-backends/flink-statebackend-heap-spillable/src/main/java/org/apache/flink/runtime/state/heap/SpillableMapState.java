@@ -88,8 +88,8 @@ public class SpillableMapState<K, N, UK, UV>
 	@Override
 	public void put(UK userKey, UV userValue) {
 
-		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
-			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final SpillableStateTableImpl<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTableImpl<K, N, Map<UK, UV>>) stateTable;
 		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
 		final N namespace = currentNamespace;
 		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
@@ -114,8 +114,8 @@ public class SpillableMapState<K, N, UK, UV>
 	@Override
 	public void putAll(Map<UK, UV> value) {
 
-		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
-			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final SpillableStateTableImpl<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTableImpl<K, N, Map<UK, UV>>) stateTable;
 		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
 		final N namespace = currentNamespace;
 		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
@@ -140,8 +140,8 @@ public class SpillableMapState<K, N, UK, UV>
 	@Override
 	public void remove(UK userKey) {
 
-		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
-			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final SpillableStateTableImpl<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTableImpl<K, N, Map<UK, UV>>) stateTable;
 		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
 		final N namespace = currentNamespace;
 		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
@@ -171,8 +171,8 @@ public class SpillableMapState<K, N, UK, UV>
 
 	@Override
 	public Iterable<Map.Entry<UK, UV>> entries() {
-		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
-			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final SpillableStateTableImpl<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTableImpl<K, N, Map<UK, UV>>) stateTable;
 		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
 		final N namespace = currentNamespace;
 		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
@@ -194,8 +194,8 @@ public class SpillableMapState<K, N, UK, UV>
 
 	@Override
 	public Iterable<UK> keys() {
-		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
-			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final SpillableStateTableImpl<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTableImpl<K, N, Map<UK, UV>>) stateTable;
 		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
 		final N namespace = currentNamespace;
 		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
@@ -233,8 +233,8 @@ public class SpillableMapState<K, N, UK, UV>
 
 	@Override
 	public Iterable<UV> values() {
-		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
-			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final SpillableStateTableImpl<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTableImpl<K, N, Map<UK, UV>>) stateTable;
 		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
 		final N namespace = currentNamespace;
 		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();
@@ -272,8 +272,8 @@ public class SpillableMapState<K, N, UK, UV>
 
 	@Override
 	public Iterator<Map.Entry<UK, UV>> iterator() {
-		final SpillableStateTable<K, N, Map<UK, UV>> spillableStateTable =
-			(SpillableStateTable<K, N, Map<UK, UV>>) stateTable;
+		final SpillableStateTableImpl<K, N, Map<UK, UV>> spillableStateTable =
+			(SpillableStateTableImpl<K, N, Map<UK, UV>>) stateTable;
 		final K key = spillableStateTable.getInternalKeyContext().getCurrentKey();
 		final N namespace = currentNamespace;
 		final StateMap<K, N, Map<UK, UV>> stateMap = spillableStateTable.getCurrentStateMap();

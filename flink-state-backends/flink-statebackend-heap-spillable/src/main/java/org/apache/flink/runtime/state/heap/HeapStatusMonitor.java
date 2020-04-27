@@ -28,9 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
-import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryUsage;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -45,8 +43,6 @@ public class HeapStatusMonitor {
 
 	private static final Logger LOG = LoggerFactory.getLogger(HeapStatusMonitor.class);
 
-	static final long INVAID_MEMORY_SIZE = -1L;
-
 	/** Single instance in a JVM process. */
 	private static HeapStatusMonitor statusMonitor;
 
@@ -58,8 +54,6 @@ public class HeapStatusMonitor {
 	private final long maxMemory;
 
 	private final List<GarbageCollectorMXBean> garbageCollectorMXBeans;
-
-	private final List<MemoryPoolMXBean> memoryPoolMXBeans;
 
 	/** Generate ascending id for each monitor result. */
 	private final AtomicLong resultIdGenerator;
@@ -90,15 +84,9 @@ public class HeapStatusMonitor {
 		this.memoryMXBean = ManagementFactory.getMemoryMXBean();
 		this.maxMemory = memoryMXBean.getHeapMemoryUsage().getMax();
 		this.garbageCollectorMXBeans = ManagementFactory.getGarbageCollectorMXBeans();
-		this.memoryPoolMXBeans = new ArrayList<>();
-		for (MemoryPoolMXBean memoryPoolMXBean : ManagementFactory.getMemoryPoolMXBeans()) {
-			if (memoryPoolMXBean.isCollectionUsageThresholdSupported()) {
-				memoryPoolMXBeans.add(memoryPoolMXBean);
-			}
-		}
 		this.resultIdGenerator = new AtomicLong(0L);
 		this.monitorResult = new MonitorResult(System.currentTimeMillis(), resultIdGenerator.getAndIncrement(),
-			memoryMXBean.getHeapMemoryUsage(), 0, INVAID_MEMORY_SIZE);
+			memoryMXBean.getHeapMemoryUsage(), 0);
 		this.lastGcTime = 0L;
 		this.lastGcCount = 0L;
 
@@ -117,8 +105,7 @@ public class HeapStatusMonitor {
 	private void runCheck() {
 		long timestamp = System.currentTimeMillis();
 		long id = resultIdGenerator.getAndIncrement();
-		this.monitorResult = new MonitorResult(timestamp, id, memoryMXBean.getHeapMemoryUsage(),
-			getGarbageCollectionTime(), getMemoryUsedAfterGc());
+		this.monitorResult = new MonitorResult(timestamp, id, memoryMXBean.getHeapMemoryUsage(), getGarbageCollectionTime());
 		if (LOG.isDebugEnabled()) {
 			LOG.debug("Check memory status, {}", monitorResult.toString());
 		}
@@ -145,18 +132,6 @@ public class HeapStatusMonitor {
 		lastGcTime = timeMillis;
 
 		return averageGcTime;
-	}
-
-	private long getMemoryUsedAfterGc() {
-		return memoryPoolMXBeans.stream()
-			.map(MemoryPoolMXBean::getCollectionUsage)
-			.map(MemoryUsage::getUsed)
-			.reduce(0L, (a, b) -> a + b);
-	}
-
-	public boolean isGarbageCollectionMemoryUsageSupported() {
-		// TODO enable this after make sure how it works
-		return false;
 	}
 
 	public MonitorResult getMonitorResult() {
@@ -216,19 +191,16 @@ public class HeapStatusMonitor {
 
 		private final long garbageCollectionTime;
 
-		private final long totalUsedMemoryAfterGc;
-
-		MonitorResult(long timestamp, long id, MemoryUsage memoryUsage, long garbageCollectionTime, long totalUsedMemoryAfterGc) {
-			this(timestamp, id, memoryUsage.getMax(), memoryUsage.getUsed(), garbageCollectionTime, totalUsedMemoryAfterGc);
+		MonitorResult(long timestamp, long id, MemoryUsage memoryUsage, long garbageCollectionTime) {
+			this(timestamp, id, memoryUsage.getMax(), memoryUsage.getUsed(), garbageCollectionTime);
 		}
 
-		MonitorResult(long timestamp, long id, long totalMemory, long totalUsedMemory, long garbageCollectionTime, long totalUsedMemoryAfterGc) {
+		MonitorResult(long timestamp, long id, long totalMemory, long totalUsedMemory, long garbageCollectionTime) {
 			this.timestamp = timestamp;
 			this.id = id;
 			this.totalMemory = totalMemory;
 			this.totalUsedMemory = totalUsedMemory;
 			this.garbageCollectionTime = garbageCollectionTime;
-			this.totalUsedMemoryAfterGc = totalUsedMemoryAfterGc;
 		}
 
 		public long getTimestamp() {
@@ -251,10 +223,6 @@ public class HeapStatusMonitor {
 			return garbageCollectionTime;
 		}
 
-		public long getTotalUsedMemoryAfterGc() {
-			return totalUsedMemoryAfterGc;
-		}
-
 		@Override
 		public String toString() {
 			return "MonitorResult{" +
@@ -263,7 +231,6 @@ public class HeapStatusMonitor {
 				", totalMemory=" + totalMemory +
 				", totalUsedMemory=" + totalUsedMemory +
 				", garbageCollectionTime=" + garbageCollectionTime +
-				", totalUsedMemoryAfterGc=" + totalUsedMemoryAfterGc +
 				'}';
 		}
 	}

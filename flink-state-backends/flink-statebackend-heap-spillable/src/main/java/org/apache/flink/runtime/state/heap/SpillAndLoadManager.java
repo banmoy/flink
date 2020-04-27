@@ -18,12 +18,15 @@
 
 package org.apache.flink.runtime.state.heap;
 
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
@@ -35,7 +38,7 @@ import java.util.function.Function;
 /**
  * Manage state spill and load.
  */
-public class SpillAndLoadManager<K> {
+public class SpillAndLoadManager {
 
 	private static final Logger LOG = LoggerFactory.getLogger(SpillAndLoadManager.class);
 
@@ -49,7 +52,7 @@ public class SpillAndLoadManager<K> {
 	private static final double WEIGHT_LOAD_REQUEST_RATE = 0.7;
 	private static final double WEIGHT_LOAD_SUM = WEIGHT_LOAD_RETAINED_SIZE + WEIGHT_LOAD_REQUEST_RATE;
 
-	private final Map<String, StateTable<K, ?, ?>> registeredKVStates;
+	private final StateTableContainer stateTableContainer;
 	private final HeapStatusMonitor heapStatusMonitor;
 
 	private final long gcTimeThreshold;
@@ -60,8 +63,6 @@ public class SpillAndLoadManager<K> {
 	private final long triggerInterval;
 	private final long resourceCheckInterval;
 
-
-	private final boolean isGarbageCollectionMemoryUsageSupported;
 	private final long maxMemory;
 	private final long highWatermarkSize;
 	private final long loadStartSize;
@@ -72,20 +73,47 @@ public class SpillAndLoadManager<K> {
 	private HeapStatusMonitor.MonitorResult lastMonitorResult;
 
 	public SpillAndLoadManager(
-		Map<String, StateTable<K, ?, ?>> registeredKVStates,
+		StateTableContainer stateTableContainer,
 		HeapStatusMonitor heapStatusMonitor,
 		Configuration configuration) {
-		this.registeredKVStates = Preconditions.checkNotNull(registeredKVStates);
+		this.stateTableContainer = Preconditions.checkNotNull(stateTableContainer);
 		this.heapStatusMonitor = Preconditions.checkNotNull(heapStatusMonitor);
 		this.gcTimeThreshold = configuration.get(SpillableOptions.GC_TIME_THRESHOLD);
-		this.highWatermarkRatio = configuration.get(SpillableOptions.HIGH_WARTERMARK_RATIO);
+
+		float localHighWaterMarkRatio = configuration.get(SpillableOptions.HIGH_WATERMARK_RATIO);
+		float localLoadStartRatio = configuration.get(SpillableOptions.LOAD_START_RATIO);
+		float localLoadEndRatio = configuration.get(SpillableOptions.LOAD_END_RATIO);
+		if (floatSum(localLoadEndRatio, 0.1f) > localHighWaterMarkRatio) {
+			float adjustedEndRate = floatSub(localHighWaterMarkRatio, 0.1f);
+			LOG.warn("The configured load end ratio {} is too big, will use {} instead",
+				localLoadEndRatio, adjustedEndRate);
+			localLoadEndRatio = adjustedEndRate;
+		}
+		// Check and make sure loadStartSize < loadEndSize < spillThreshold after separate adjustment
+		if (localLoadStartRatio >= localLoadEndRatio) {
+			LOG.warn("Load start ratio {} >= end ratio {} even with adjustment, "
+					+ "will use default (startRatio={}, endRatio={}) instead",
+					localLoadStartRatio, localLoadEndRatio,
+					SpillableOptions.LOAD_START_RATIO.defaultValue(),
+					SpillableOptions.LOAD_END_RATIO.defaultValue());
+			localLoadStartRatio = SpillableOptions.LOAD_START_RATIO.defaultValue();
+			localLoadEndRatio = SpillableOptions.LOAD_END_RATIO.defaultValue();
+			if (floatSum(localLoadEndRatio, 0.1f) > localHighWaterMarkRatio) {
+				LOG.warn("Load end ratio {} is too close to spill ratio {} after adjustment," +
+					"will use default value {} for spill ratio",
+					localLoadEndRatio, localHighWaterMarkRatio,
+					SpillableOptions.SPILL_SIZE_RATIO.defaultValue());
+				localHighWaterMarkRatio = SpillableOptions.SPILL_SIZE_RATIO.defaultValue();
+			}
+		}
+		this.highWatermarkRatio = localHighWaterMarkRatio;
+		this.loadStartRatio = localLoadStartRatio;
+		this.loadEndRatio = localLoadEndRatio;
 		this.spillSizeRatio = configuration.get(SpillableOptions.SPILL_SIZE_RATIO);
-		this.loadStartRatio = configuration.get(SpillableOptions.LOAD_START_RATIO);
-		this.loadEndRatio = configuration.get(SpillableOptions.LOAD_END_RATIO);
+
 		this.triggerInterval = configuration.get(SpillableOptions.TRIGGER_INTERVAL);
 		this.resourceCheckInterval = configuration.get(SpillableOptions.RESOURCE_CHECK_INTERVAL);
 
-		this.isGarbageCollectionMemoryUsageSupported = heapStatusMonitor.isGarbageCollectionMemoryUsageSupported();
 		this.maxMemory = heapStatusMonitor.getMaxMemory();
 		this.highWatermarkSize = (long) (maxMemory * highWatermarkRatio);
 		this.loadStartSize = (long) (maxMemory * loadStartRatio);
@@ -105,6 +133,7 @@ public class SpillAndLoadManager<K> {
 		lastResourceCheckTime = currentTime;
 		// getMonitorResult will access a volatile variable, so this is a heavy operation
 		HeapStatusMonitor.MonitorResult monitorResult = heapStatusMonitor.getMonitorResult();
+		LOG.debug("Update monitor result {}", monitorResult);
 
 		// monitor hasn't update result
 		if (lastMonitorResult != null && lastMonitorResult.getId() == monitorResult.getId()) {
@@ -113,12 +142,14 @@ public class SpillAndLoadManager<K> {
 		lastMonitorResult = monitorResult;
 
 		ActionResult checkResult = decideAction(monitorResult);
+		LOG.debug("Decide action {}", checkResult);
 		if (checkResult.action == Action.NONE) {
 			return;
 		}
 
 		// limit the frequence of spill/load so that monitor can update memory usage after spill/load
 		if (monitorResult.getTimestamp() - lastTriggerTime < triggerInterval) {
+			LOG.debug("Too frequent to spill/load, last time is {}", lastTriggerTime);
 			return;
 		}
 
@@ -133,15 +164,13 @@ public class SpillAndLoadManager<K> {
 	}
 
 	public ActionResult decideAction(HeapStatusMonitor.MonitorResult monitorResult) {
-		long usedMemory = isGarbageCollectionMemoryUsageSupported ?
-			monitorResult.getTotalUsedMemoryAfterGc() : monitorResult.getTotalUsedMemory();
+		long gcTime = monitorResult.getGarbageCollectionTime();
+		long usedMemory = monitorResult.getTotalUsedMemory();
 
 		// 1. check whether to spill
-		if (monitorResult.getGarbageCollectionTime() > gcTimeThreshold ||
-			(isGarbageCollectionMemoryUsageSupported && usedMemory > highWatermarkSize)) {
-			float spillRatio = usedMemory < highWatermarkSize ? spillSizeRatio :
-				(float) (usedMemory - highWatermarkSize) / usedMemory;
-			return ActionResult.ofSpill(spillRatio);
+		if (gcTime > gcTimeThreshold) {
+			// TODO whether to calculate spill ration dynamically
+			return ActionResult.ofSpill(spillSizeRatio);
 		}
 
 		// 2. check whether to load
@@ -153,7 +182,7 @@ public class SpillAndLoadManager<K> {
 		return ActionResult.ofNone();
 	}
 
-	public void doSpill(ActionResult actionResult) {
+	void doSpill(ActionResult actionResult) {
 		List<SpillableStateTable.StateMapMeta> onHeapStateMapMetas =
 			getStateMapMetas((meta) -> meta.isOnHeap() && meta.getSize() > 0);
 		if (onHeapStateMapMetas.isEmpty()) {
@@ -174,7 +203,7 @@ public class SpillAndLoadManager<K> {
 
 		for (SpillableStateTable.StateMapMeta meta : onHeapStateMapMetas) {
 			meta.getStateTable().spillState(meta.getKeyGroupIndex());
-			LOG.debug("Spill state in keygroup {} successfully", meta.getKeyGroupIndex());
+			LOG.debug("Spill state in key group {} successfully", meta.getKeyGroupIndex());
 			spillSize -= meta.getEstimatedMemorySize();
 			if (spillSize <= 0) {
 				break;
@@ -182,7 +211,7 @@ public class SpillAndLoadManager<K> {
 		}
 	}
 
-	public void doLoad(ActionResult actionResult) {
+	void doLoad(ActionResult actionResult) {
 		List<SpillableStateTable.StateMapMeta> onDiskStateMapMetas =
 			getStateMapMetas((meta) -> !meta.isOnHeap() && meta.getSize() > 0);
 		if (onDiskStateMapMetas.isEmpty()) {
@@ -209,18 +238,18 @@ public class SpillAndLoadManager<K> {
 			}
 
 			meta.getStateTable().loadState(meta.getKeyGroupIndex());
-			LOG.debug("Load state in keygroup {} successfully", meta.getKeyGroupIndex());
+			LOG.debug("Load state in key group {} successfully", meta.getKeyGroupIndex());
 		}
 	}
 
 	private List<SpillableStateTable.StateMapMeta> getStateMapMetas(
 		Function<SpillableStateTable.StateMapMeta, Boolean> stateMapFilter) {
 		List<SpillableStateTable.StateMapMeta> stateMapMetas = new ArrayList<>();
-		for (StateTable stateTable : registeredKVStates.values()) {
+		for (Tuple2<String, SpillableStateTable> tuple : stateTableContainer) {
 			int len = stateMapMetas.size();
-			SpillableStateTable spillableStateTable = (SpillableStateTable) stateTable;
+			SpillableStateTable spillableStateTable = tuple.f1;
 			Iterator<SpillableStateTable.StateMapMeta> iterator = spillableStateTable.stateMapIterator();
-			if (iterator.hasNext()) {
+			while (iterator.hasNext()) {
 				SpillableStateTable.StateMapMeta meta = iterator.next();
 				if (stateMapFilter.apply(meta)) {
 					stateMapMetas.add(meta);
@@ -243,7 +272,7 @@ public class SpillAndLoadManager<K> {
 		return stateMapMetas;
 	}
 
-	public void sortStateMapMeta(Action action, List<SpillableStateTable.StateMapMeta> stateMapMetas) {
+	private void sortStateMapMeta(Action action, List<SpillableStateTable.StateMapMeta> stateMapMetas) {
 		if (stateMapMetas.isEmpty()) {
 			return;
 		}
@@ -325,6 +354,60 @@ public class SpillAndLoadManager<K> {
 		return (weightRetainedSize * normalizedSize + weightRequestRate * normalizedRequest) / weightSum;
 	}
 
+	private float floatSum(float d1, float d2) {
+		BigDecimal bd1 = new BigDecimal(Float.toString(d1));
+		BigDecimal bd2 = new BigDecimal(Float.toString(d2));
+		return bd1.add(bd2).floatValue();
+	}
+
+	private float floatSub(float d1, float d2) {
+		BigDecimal bd1 = new BigDecimal(Float.toString(d1));
+		BigDecimal bd2 = new BigDecimal(Float.toString(d2));
+		return bd1.subtract(bd2).floatValue();
+	}
+
+	@VisibleForTesting
+	long getGcTimeThreshold() {
+		return gcTimeThreshold;
+	}
+
+	@VisibleForTesting
+	long getTriggerInterval() {
+		return triggerInterval;
+	}
+
+	@VisibleForTesting
+	long getResourceCheckInterval() {
+		return resourceCheckInterval;
+	}
+
+	@VisibleForTesting
+	long getMaxMemory() {
+		return maxMemory;
+	}
+
+	public float getSpillSizeRatio() {
+		return spillSizeRatio;
+	}
+
+	@VisibleForTesting
+	long getHighWatermarkSize() {
+		return highWatermarkSize;
+	}
+
+	@VisibleForTesting
+	long getLoadStartSize() {
+		return loadStartSize;
+	}
+
+	@VisibleForTesting
+	long getLoadEndSize() {
+		return loadEndSize;
+	}
+
+	/**
+	 * Enumeration of action.
+	 */
 	enum Action {
 		NONE, SPILL, LOAD
 	}
@@ -338,6 +421,29 @@ public class SpillAndLoadManager<K> {
 			this.spillOrLoadRatio = spillOrLoadRatio;
 		}
 
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			}
+
+			if (obj == null || getClass() != obj.getClass()) {
+				return false;
+			}
+
+			ActionResult other = (ActionResult) obj;
+			return action == other.action &&
+				spillOrLoadRatio == other.spillOrLoadRatio;
+		}
+
+		@Override
+		public String toString() {
+			return "ActionResult{" +
+				"action=" + action +
+				", spillOrLoadRatio=" + spillOrLoadRatio +
+				'}';
+		}
+
 		static ActionResult ofNone() {
 			return new ActionResult(Action.NONE, 0.0f);
 		}
@@ -348,6 +454,37 @@ public class SpillAndLoadManager<K> {
 
 		static ActionResult ofLoad(float ratio) {
 			return new ActionResult(Action.LOAD, ratio);
+		}
+	}
+
+	interface StateTableContainer extends Iterable<Tuple2<String, SpillableStateTable>> {
+	}
+
+	static class StateTableContainerImpl<K> implements StateTableContainer {
+
+		private final Map<String, StateTable<K, ?, ?>> registeredKVStates;
+
+		public StateTableContainerImpl(Map<String, StateTable<K, ?, ?>> registeredKVStates) {
+			this.registeredKVStates = registeredKVStates;
+		}
+
+		@Override
+		public Iterator<Tuple2<String, SpillableStateTable>> iterator() {
+			return new Iterator<Tuple2<String, SpillableStateTable>>() {
+				private final Iterator<Map.Entry<String, StateTable<K, ?, ?>>> iter =
+					registeredKVStates.entrySet().iterator();
+
+				@Override
+				public boolean hasNext() {
+					return iter.hasNext();
+				}
+
+				@Override
+				public Tuple2<String, SpillableStateTable> next() {
+					Map.Entry<String, StateTable<K, ?, ?>> entry = iter.next();
+					return Tuple2.of(entry.getKey(), (SpillableStateTable) entry.getValue());
+				}
+			};
 		}
 	}
 }

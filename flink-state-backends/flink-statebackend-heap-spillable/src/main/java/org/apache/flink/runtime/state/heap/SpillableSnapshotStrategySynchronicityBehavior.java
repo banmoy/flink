@@ -46,7 +46,7 @@ class SpillableSnapshotStrategySynchronicityBehavior<K> implements SnapshotStrat
 		InternalKeyContext<K> keyContext,
 		RegisteredKeyValueStateBackendMetaInfo<N, V> newMetaInfo,
 		TypeSerializer<K> keySerializer) {
-		return new SpillableStateTable<>(keyContext, newMetaInfo, keySerializer,
+		return new SpillableStateTableImpl<>(keyContext, newMetaInfo, keySerializer,
 			spaceAllocator, spillAndLoadManager);
 	}
 }

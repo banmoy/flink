@@ -24,7 +24,7 @@ import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
 
 /**
- * Configuration options for space allocation.
+ * Options for space allocation.
  */
 public class SpillableOptions {
 
@@ -64,7 +64,7 @@ public class SpillableOptions {
 		.withDescription("If garbage collection time exceeds this threshold, state will be spilled.");
 
 	/** Watermark under JVM heap usage is tried to control. */
-	public static final ConfigOption<Float> HIGH_WARTERMARK_RATIO = ConfigOptions
+	public static final ConfigOption<Float> HIGH_WATERMARK_RATIO = ConfigOptions
 		.key("state.backend.spillable.high-watermark.ratio")
 		.floatType()
 		.defaultValue(0.5f)

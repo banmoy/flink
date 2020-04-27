@@ -45,6 +45,7 @@ import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Random;
 
 /**
@@ -89,8 +90,11 @@ public class SnapshotCompatibilityTest {
 		Configuration configuration = new Configuration();
 		configuration.set(SpillableOptions.SPACE_TYPE, SpaceAllocator.SpaceType.MMAP.name());
 		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, new File[] {tmp.newFolder()});
-		final SpillableStateTable<Integer, Integer, ArrayList<Integer>> nestedMapsStateTable =
-			new SpillableStateTable<>(keyContext, metaInfo, keySerializer, spaceAllocator);
+		SpillAndLoadManager spillAndLoadManager = new SpillAndLoadManager(
+			new SpillAndLoadManager.StateTableContainerImpl<>(new HashMap<>()),
+			new TestHeapStatusMonitor(Long.MAX_VALUE), new Configuration());
+		final SpillableStateTableImpl<Integer, Integer, ArrayList<Integer>> nestedMapsStateTable =
+			new SpillableStateTableImpl<>(keyContext, metaInfo, keySerializer, spaceAllocator, spillAndLoadManager);
 
 		restoreStateTableFromSnapshot(nestedMapsStateTable, snapshot, keyContext.getKeyGroupRange());
 		snapshot.release();

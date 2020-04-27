@@ -28,7 +28,7 @@ import javax.annotation.Nonnull;
 import java.util.List;
 
 /**
- * This class represents the snapshot of a {@link SpillableStateTable} and has a role in operator state checkpointing.
+ * This class represents the snapshot of a {@link SpillableStateTableImpl} and has a role in operator state checkpointing.
  * This class is also responsible for writing the state in the process of checkpointing.
  *
  * @param <K> type of key
@@ -51,10 +51,10 @@ public class SpillableStateTableSnapshot<K, N, S> extends AbstractStateTableSnap
 	/**
 	 * Creates a new {@link CopyOnWriteSkipListStateMapSnapshot}.
 	 *
-	 * @param owningStateTable the {@link SpillableStateTable} for which this object represents a snapshot.
+	 * @param owningStateTable the {@link SpillableStateTableImpl} for which this object represents a snapshot.
 	 */
 	SpillableStateTableSnapshot(
-		SpillableStateTable<K, N, S> owningStateTable,
+		SpillableStateTableImpl<K, N, S> owningStateTable,
 		TypeSerializer<K> localKeySerializer,
 		TypeSerializer<N> localNamespaceSerializer,
 		TypeSerializer<S> localStateSerializer,
