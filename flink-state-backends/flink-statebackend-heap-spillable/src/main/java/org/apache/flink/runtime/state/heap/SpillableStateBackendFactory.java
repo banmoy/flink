@@ -23,6 +23,7 @@ package org.apache.flink.runtime.state.heap;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.IllegalConfigurationException;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.runtime.state.StateBackendFactory;
 
 import java.io.IOException;
@@ -30,12 +31,12 @@ import java.io.IOException;
 public class SpillableStateBackendFactory implements StateBackendFactory<SpillableStateBackend> {
 
 	@Override
-	public SpillableStateBackend createFromConfig(Configuration config, ClassLoader classLoader)
+	public SpillableStateBackend createFromConfig(ReadableConfig config, ClassLoader classLoader)
 		throws IllegalConfigurationException, IOException {
 
 		// we need to explicitly read the checkpoint directory here, because that
 		// is a required constructor parameter
-		final String checkpointDirURI = config.getString(CheckpointingOptions.CHECKPOINTS_DIRECTORY);
+		final String checkpointDirURI = config.get(CheckpointingOptions.CHECKPOINTS_DIRECTORY);
 		if (checkpointDirURI == null) {
 			throw new IllegalConfigurationException(
 				"Cannot createSampleEstimator the Spillable state backend: The configuration does not specify the " +

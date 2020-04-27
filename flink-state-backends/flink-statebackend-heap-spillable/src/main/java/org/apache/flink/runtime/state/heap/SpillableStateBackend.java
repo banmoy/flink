@@ -23,6 +23,7 @@ package org.apache.flink.runtime.state.heap;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.metrics.MetricGroup;
@@ -90,7 +91,7 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 		this.checkpointStreamBackend = Preconditions.checkNotNull(checkpointStreamBackend);
 	}
 
-	private SpillableStateBackend(SpillableStateBackend original, Configuration config, ClassLoader classLoader) {
+	private SpillableStateBackend(SpillableStateBackend original, ReadableConfig config, ClassLoader classLoader) {
 		// reconfigure the state backend backing the streams
 		final StateBackend originalStreamBackend = original.checkpointStreamBackend;
 		this.checkpointStreamBackend = originalStreamBackend instanceof ConfigurableStateBackend
@@ -98,12 +99,12 @@ public class SpillableStateBackend extends AbstractStateBackend implements Confi
 			: originalStreamBackend;
 
 		this.configuration = new Configuration();
-		this.configuration.addAll(config);
+		this.configuration.addAll(SpillableOptions.filter(config));
 		this.configuration.addAll(original.configuration);
 	}
 
 	@Override
-	public SpillableStateBackend configure(Configuration config, ClassLoader classLoader) {
+	public SpillableStateBackend configure(ReadableConfig config, ClassLoader classLoader) {
 		return new SpillableStateBackend(this, config, classLoader);
 	}
 

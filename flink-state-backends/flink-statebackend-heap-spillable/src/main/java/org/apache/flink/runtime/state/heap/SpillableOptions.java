@@ -20,7 +20,9 @@ package org.apache.flink.runtime.state.heap;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.MemorySize;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
 
 /**
@@ -106,4 +108,26 @@ public class SpillableOptions {
 		.defaultValue(10000L)
 		.withDescription("Interval to check resource. High frequence will degrade performance but"
 			+ " be more sensitive to memory change.");
+
+	private static final ConfigOption[] SUPPORTED_CONFIG = new ConfigOption[]{
+		SPACE_TYPE, CHUNK_SIZE, MAX_MMAP_FILES, HEAP_STATUS_CHECK_INTERVAL, GC_TIME_THRESHOLD, HIGH_WATERMARK_RATIO,
+		SPILL_SIZE_RATIO, LOAD_START_RATIO, LOAD_END_RATIO, TRIGGER_INTERVAL, RESOURCE_CHECK_INTERVAL
+	};
+
+	public static Configuration filter(ReadableConfig readableConfig) {
+		Configuration conf = new Configuration();
+		conf.set(SPACE_TYPE, readableConfig.get(SPACE_TYPE));
+		conf.set(CHUNK_SIZE, readableConfig.get(CHUNK_SIZE));
+		conf.set(MAX_MMAP_FILES, readableConfig.get(MAX_MMAP_FILES));
+		conf.set(HEAP_STATUS_CHECK_INTERVAL, readableConfig.get(HEAP_STATUS_CHECK_INTERVAL));
+		conf.set(GC_TIME_THRESHOLD, readableConfig.get(GC_TIME_THRESHOLD));
+		conf.set(HIGH_WATERMARK_RATIO, readableConfig.get(HIGH_WATERMARK_RATIO));
+		conf.set(SPILL_SIZE_RATIO, readableConfig.get(SPILL_SIZE_RATIO));
+		conf.set(LOAD_START_RATIO, readableConfig.get(LOAD_START_RATIO));
+		conf.set(LOAD_END_RATIO, readableConfig.get(LOAD_END_RATIO));
+		conf.set(TRIGGER_INTERVAL, readableConfig.get(TRIGGER_INTERVAL));
+		conf.set(RESOURCE_CHECK_INTERVAL, readableConfig.get(RESOURCE_CHECK_INTERVAL));
+
+		return conf;
+	}
 }
