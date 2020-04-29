@@ -30,11 +30,11 @@ import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
  */
 public class SpillableOptions {
 
-	/** Type of space used to createSampleEstimator chunk. */
+	/** Type of space used to create chunk. */
 	public static final ConfigOption<String> SPACE_TYPE = ConfigOptions
 		.key("state.backend.spillable.space-type")
 		.defaultValue(SpaceAllocator.SpaceType.MMAP.name())
-		.withDescription(String.format("Type of space used to createSampleEstimator chunk. Options are %s (default), %s or %s.",
+		.withDescription(String.format("Type of space used to create chunk. Options are %s (default), %s or %s.",
 			SpaceAllocator.SpaceType.MMAP.name(), SpaceAllocator.SpaceType.HEAP.name(), SpaceAllocator.SpaceType.OFFHEAP.name()));
 
 	/** Size of chunk. */

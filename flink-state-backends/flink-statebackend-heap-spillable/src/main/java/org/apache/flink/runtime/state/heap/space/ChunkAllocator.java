@@ -21,7 +21,7 @@ package org.apache.flink.runtime.state.heap.space;
 import java.io.Closeable;
 
 /**
- * Allocator to createSampleEstimator chunks.
+ * Allocator to create chunks.
  */
 public interface ChunkAllocator extends Closeable {
 

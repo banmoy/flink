@@ -76,7 +76,7 @@ public class MmapChunkAllocatorTest {
 
 	@Test
 	public void testCreateChunk() throws Exception {
-		// createSampleEstimator multiple chunk and can be read/write normal
+		// create multiple chunk and can be read/write normal
 	}
 
 	@Test

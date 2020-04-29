@@ -25,7 +25,7 @@ import org.apache.flink.api.common.typeutils.base.MapSerializer;
 import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
 
 /**
- * Factory to createSampleEstimator {@link StateMemoryEstimator}.
+ * Factory to create {@link StateMemoryEstimator}.
  */
 public class StateMemoryEstimatorFactory {
 
