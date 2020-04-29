@@ -20,6 +20,7 @@
 
 package org.apache.flink.runtime.state.heap;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.state.AggregatingStateDescriptor;
 import org.apache.flink.api.common.state.FoldingStateDescriptor;
@@ -73,6 +74,7 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 	private final SpaceAllocator spaceAllocator;
 	private final File[] localPaths;
 	private final SpillAndLoadManager spillAndLoadManager;
+	private final CheckpointManager checkpointManager;
 
 	public SpillableKeyedStateBackend(
 		TaskKvStateRegistry kvStateRegistry,
@@ -86,10 +88,11 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates,
 		LocalRecoveryConfig localRecoveryConfig,
 		HeapPriorityQueueSetFactory priorityQueueSetFactory,
-		HeapSnapshotStrategy<K> snapshotStrategy,
+		SpillableSnapshotStrategy<K> snapshotStrategy,
 		InternalKeyContext<K> keyContext,
 		SpaceAllocator spaceAllocator,
 		SpillAndLoadManager spillAndLoadManager,
+		CheckpointManager checkpointManager,
 		File[] localPaths) {
 		super(
 			kvStateRegistry,
@@ -107,6 +110,7 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 			keyContext);
 		this.spaceAllocator = spaceAllocator;
 		this.spillAndLoadManager = spillAndLoadManager;
+		this.checkpointManager = checkpointManager;
 		this.localPaths = localPaths;
 		LOG.info("SpillableKeyedStateBackend is initialized.");
 	}
@@ -154,5 +158,10 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 			StateDescriptor<S, SV> stateDesc,
 			StateTable<K, N, SV> stateTable,
 			TypeSerializer<K> keySerializer) throws Exception;
+	}
+
+	@VisibleForTesting
+	CheckpointManager getCheckpointManager() {
+		return checkpointManager;
 	}
 }

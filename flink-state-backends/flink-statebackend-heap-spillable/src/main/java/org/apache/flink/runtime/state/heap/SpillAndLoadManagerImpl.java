@@ -54,7 +54,9 @@ public class SpillAndLoadManagerImpl implements SpillAndLoadManager {
 
 	private final StateTableContainer stateTableContainer;
 	private final HeapStatusMonitor heapStatusMonitor;
+	private final CheckpointManager checkpointManager;
 
+	private final boolean cancelCheckpoint;
 	private final long gcTimeThreshold;
 	private final float highWatermarkRatio;
 	private final float spillSizeRatio;
@@ -75,9 +77,13 @@ public class SpillAndLoadManagerImpl implements SpillAndLoadManager {
 	public SpillAndLoadManagerImpl(
 		StateTableContainer stateTableContainer,
 		HeapStatusMonitor heapStatusMonitor,
+		CheckpointManager checkpointManager,
 		Configuration configuration) {
 		this.stateTableContainer = Preconditions.checkNotNull(stateTableContainer);
 		this.heapStatusMonitor = Preconditions.checkNotNull(heapStatusMonitor);
+		this.checkpointManager = Preconditions.checkNotNull(checkpointManager);
+
+		this.cancelCheckpoint = configuration.get(SpillableOptions.CANCEL_CHECKPOINT);
 		this.gcTimeThreshold = configuration.get(SpillableOptions.GC_TIME_THRESHOLD);
 
 		float localHighWaterMarkRatio = configuration.get(SpillableOptions.HIGH_WATERMARK_RATIO);
@@ -202,6 +208,10 @@ public class SpillAndLoadManagerImpl implements SpillAndLoadManager {
 
 		if (spillSize == 0) {
 			return;
+		}
+
+		if (cancelCheckpoint) {
+			checkpointManager.cancelAllCheckpoints();
 		}
 
 		for (SpillableStateTable.StateMapMeta meta : onHeapStateMapMetas) {

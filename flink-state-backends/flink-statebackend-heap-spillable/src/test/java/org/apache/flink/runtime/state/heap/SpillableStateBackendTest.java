@@ -20,7 +20,17 @@
 
 package org.apache.flink.runtime.state.heap;
 
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.common.typeutils.base.IntSerializer;
+import org.apache.flink.runtime.checkpoint.CheckpointOptions;
+import org.apache.flink.runtime.state.CheckpointStreamFactory;
+import org.apache.flink.runtime.state.KeyedStateHandle;
+import org.apache.flink.runtime.state.SharedStateRegistry;
+import org.apache.flink.runtime.state.SnapshotResult;
 import org.apache.flink.runtime.state.StateBackendTestBase;
+import org.apache.flink.runtime.state.VoidNamespace;
+import org.apache.flink.runtime.state.VoidNamespaceSerializer;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 
 import org.junit.Ignore;
@@ -29,7 +39,15 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
+import java.util.concurrent.RunnableFuture;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Tests for {@link SpillableStateBackend}.
+ */
 public class SpillableStateBackendTest extends StateBackendTestBase<SpillableStateBackend> {
 
 	@Rule
@@ -71,5 +89,49 @@ public class SpillableStateBackendTest extends StateBackendTestBase<SpillableSta
 	@Test
 	public void testConcurrentMapIfQueryable() throws Exception {
 		super.testConcurrentMapIfQueryable();
+	}
+
+	@Test
+	public void testCheckpointManagerWithSnapshotCancellation() throws Exception {
+		testCheckpointManager(true);
+	}
+
+	@Test
+	public void testCheckpointManagerWithNormalSnapshot() throws Exception {
+		testCheckpointManager(false);
+	}
+
+	private void testCheckpointManager(boolean cancel) throws Exception {
+		CheckpointStreamFactory streamFactory = createStreamFactory();
+		SharedStateRegistry sharedStateRegistry = new SharedStateRegistry();
+
+		SpillableKeyedStateBackend<Integer> backend =
+			(SpillableKeyedStateBackend<Integer>) createKeyedBackend(IntSerializer.INSTANCE);
+		CheckpointManagerImpl checkpointManager = (CheckpointManagerImpl) backend.getCheckpointManager();
+		ValueState<String> state = backend.getPartitionedState(
+			VoidNamespace.INSTANCE, VoidNamespaceSerializer.INSTANCE, new ValueStateDescriptor<>("id", String.class));
+
+		// some modifications to the state
+		backend.setCurrentKey(1);
+		state.update("1");
+		backend.setCurrentKey(2);
+		state.update("2");
+
+		RunnableFuture<SnapshotResult<KeyedStateHandle>> snapshot =
+			backend.snapshot(0L, 0L, streamFactory, CheckpointOptions.forCheckpointWithDefaultLocation());
+
+		assertEquals(1, checkpointManager.getRunningCheckpoints().size());
+		RunnableFuture<SnapshotResult<KeyedStateHandle>> future = checkpointManager.getRunningCheckpoints().get(0L);
+		assertSame(snapshot, future);
+
+		if (cancel) {
+			snapshot.cancel(true);
+		} else {
+			runSnapshot(snapshot, sharedStateRegistry);
+		}
+
+		assertTrue(checkpointManager.getRunningCheckpoints().isEmpty());
+
+		backend.dispose();
 	}
 }

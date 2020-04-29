@@ -115,9 +115,18 @@ public class SpillableOptions {
 		.defaultValue(false)
 		.withDescription("Store states offheap for debug");
 
+	/** */
+	public static final ConfigOption<Boolean> CANCEL_CHECKPOINT = ConfigOptions
+		.key("state.backend.spillable.cancel.checkpoint")
+		.booleanType()
+		.defaultValue(true)
+		.withDescription("Whether to cancel checkpoint before spill. Cancelling checkpoints will release " +
+		"the spilled states and make them gc faster.");
+
 	public static final ConfigOption[] SUPPORTED_CONFIG = new ConfigOption[]{
 		SPACE_TYPE, CHUNK_SIZE, MAX_MMAP_FILES, HEAP_STATUS_CHECK_INTERVAL, GC_TIME_THRESHOLD, HIGH_WATERMARK_RATIO,
-		SPILL_SIZE_RATIO, LOAD_START_RATIO, LOAD_END_RATIO, TRIGGER_INTERVAL, RESOURCE_CHECK_INTERVAL, DEBUG_OFFHEAP
+		SPILL_SIZE_RATIO, LOAD_START_RATIO, LOAD_END_RATIO, TRIGGER_INTERVAL, RESOURCE_CHECK_INTERVAL, DEBUG_OFFHEAP,
+		CANCEL_CHECKPOINT
 	};
 
 	public static Configuration filter(ReadableConfig readableConfig) {
@@ -134,6 +143,7 @@ public class SpillableOptions {
 		conf.set(TRIGGER_INTERVAL, readableConfig.get(TRIGGER_INTERVAL));
 		conf.set(RESOURCE_CHECK_INTERVAL, readableConfig.get(RESOURCE_CHECK_INTERVAL));
 		conf.set(DEBUG_OFFHEAP, readableConfig.get(DEBUG_OFFHEAP));
+		conf.set(CANCEL_CHECKPOINT, readableConfig.get(CANCEL_CHECKPOINT));
 
 		return conf;
 	}

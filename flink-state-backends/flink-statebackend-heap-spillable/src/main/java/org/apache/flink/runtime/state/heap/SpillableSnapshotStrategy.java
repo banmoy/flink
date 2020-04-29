@@ -18,11 +18,9 @@
 
 package org.apache.flink.runtime.state.heap;
 
-import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
-import org.apache.flink.runtime.state.AbstractSnapshotStrategy;
 import org.apache.flink.runtime.state.AsyncSnapshotCallable;
 import org.apache.flink.runtime.state.CheckpointStreamFactory;
 import org.apache.flink.runtime.state.CheckpointStreamWithResultProvider;
@@ -33,11 +31,9 @@ import org.apache.flink.runtime.state.KeyGroupRangeOffsets;
 import org.apache.flink.runtime.state.KeyedBackendSerializationProxy;
 import org.apache.flink.runtime.state.KeyedStateHandle;
 import org.apache.flink.runtime.state.LocalRecoveryConfig;
-import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
 import org.apache.flink.runtime.state.SnapshotResult;
 import org.apache.flink.runtime.state.StateSerializerProvider;
 import org.apache.flink.runtime.state.StateSnapshot;
-import org.apache.flink.runtime.state.StateSnapshotRestore;
 import org.apache.flink.runtime.state.StreamCompressionDecorator;
 import org.apache.flink.runtime.state.StreamStateHandle;
 import org.apache.flink.runtime.state.UncompressedStreamCompressionDecorator;
@@ -46,6 +42,7 @@ import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.function.SupplierWithException;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -60,19 +57,11 @@ import java.util.concurrent.RunnableFuture;
  * Base class for the snapshots of the heap backend that outlines the algorithm and offers some hooks to realize
  * the concrete strategies. Subclasses must be threadsafe.
  */
-class HeapSnapshotStrategy<K>
-	extends AbstractSnapshotStrategy<KeyedStateHandle> implements SnapshotStrategySynchronicityBehavior<K> {
+class SpillableSnapshotStrategy<K> extends HeapSnapshotStrategy<K> {
 
-	protected final SnapshotStrategySynchronicityBehavior<K> snapshotStrategySynchronicityTrait;
-	protected final Map<String, StateTable<K, ?, ?>> registeredKVStates;
-	protected final Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates;
-	protected final StreamCompressionDecorator keyGroupCompressionDecorator;
-	protected final LocalRecoveryConfig localRecoveryConfig;
-	protected final KeyGroupRange keyGroupRange;
-	protected final CloseableRegistry cancelStreamRegistry;
-	protected final StateSerializerProvider<K> keySerializerProvider;
+	private final CheckpointManager checkpointManager;
 
-	HeapSnapshotStrategy(
+	SpillableSnapshotStrategy(
 		SnapshotStrategySynchronicityBehavior<K> snapshotStrategySynchronicityTrait,
 		Map<String, StateTable<K, ?, ?>> registeredKVStates,
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates,
@@ -80,16 +69,18 @@ class HeapSnapshotStrategy<K>
 		LocalRecoveryConfig localRecoveryConfig,
 		KeyGroupRange keyGroupRange,
 		CloseableRegistry cancelStreamRegistry,
-		StateSerializerProvider<K> keySerializerProvider) {
-		super("Heap backend snapshot");
-		this.snapshotStrategySynchronicityTrait = snapshotStrategySynchronicityTrait;
-		this.registeredKVStates = registeredKVStates;
-		this.registeredPQStates = registeredPQStates;
-		this.keyGroupCompressionDecorator = keyGroupCompressionDecorator;
-		this.localRecoveryConfig = localRecoveryConfig;
-		this.keyGroupRange = keyGroupRange;
-		this.cancelStreamRegistry = cancelStreamRegistry;
-		this.keySerializerProvider = keySerializerProvider;
+		StateSerializerProvider<K> keySerializerProvider,
+		CheckpointManager checkpointManager) {
+		super(snapshotStrategySynchronicityTrait,
+			registeredKVStates,
+			registeredPQStates,
+			keyGroupCompressionDecorator,
+			localRecoveryConfig,
+			keyGroupRange,
+			cancelStreamRegistry,
+			keySerializerProvider
+		);
+		this.checkpointManager = checkpointManager;
 	}
 
 	@Nonnull
@@ -205,6 +196,7 @@ class HeapSnapshotStrategy<K>
 
 				@Override
 				protected void cleanupProvidedResources() {
+					checkpointManager.unRegisterCheckpoint(checkpointId);
 					for (StateSnapshot tableSnapshot : cowStateStableSnapshots.values()) {
 						tableSnapshot.release();
 					}
@@ -220,53 +212,10 @@ class HeapSnapshotStrategy<K>
 
 		final FutureTask<SnapshotResult<KeyedStateHandle>> task =
 			asyncSnapshotCallable.toAsyncSnapshotFutureTask(cancelStreamRegistry);
+		checkpointManager.registerCheckpoint(checkpointId, task);
+
 		finalizeSnapshotBeforeReturnHook(task);
 
 		return task;
-	}
-
-	@Override
-	public void finalizeSnapshotBeforeReturnHook(Runnable runnable) {
-		snapshotStrategySynchronicityTrait.finalizeSnapshotBeforeReturnHook(runnable);
-	}
-
-	@Override
-	public boolean isAsynchronous() {
-		return snapshotStrategySynchronicityTrait.isAsynchronous();
-	}
-
-	@Override
-	public <N, V> StateTable<K, N, V> newStateTable(
-		InternalKeyContext<K> keyContext,
-		RegisteredKeyValueStateBackendMetaInfo<N, V> newMetaInfo,
-		TypeSerializer<K> keySerializer) {
-		return snapshotStrategySynchronicityTrait.newStateTable(keyContext, newMetaInfo, keySerializer);
-	}
-
-	protected void processSnapshotMetaInfoForAllStates(
-		List<StateMetaInfoSnapshot> metaInfoSnapshots,
-		Map<StateUID, StateSnapshot> cowStateStableSnapshots,
-		Map<StateUID, Integer> stateNamesToId,
-		Map<String, ? extends StateSnapshotRestore> registeredStates,
-		StateMetaInfoSnapshot.BackendStateType stateType) {
-
-		for (Map.Entry<String, ? extends StateSnapshotRestore> kvState : registeredStates.entrySet()) {
-			final StateUID stateUid = StateUID.of(kvState.getKey(), stateType);
-			stateNamesToId.put(stateUid, stateNamesToId.size());
-			StateSnapshotRestore state = kvState.getValue();
-			if (null != state) {
-				final StateSnapshot stateSnapshot = state.stateSnapshot();
-				metaInfoSnapshots.add(stateSnapshot.getMetaInfoSnapshot());
-				cowStateStableSnapshots.put(stateUid, stateSnapshot);
-			}
-		}
-	}
-
-	protected boolean hasRegisteredState() {
-		return !(registeredKVStates.isEmpty() && registeredPQStates.isEmpty());
-	}
-
-	public TypeSerializer<K> getKeySerializer() {
-		return keySerializerProvider.currentSchemaSerializer();
 	}
 }

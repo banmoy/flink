@@ -27,6 +27,7 @@ import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
 import org.apache.flink.runtime.state.StateSnapshot;
 import org.apache.flink.util.Preconditions;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import javax.annotation.Nonnull;
@@ -41,6 +42,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -52,24 +55,30 @@ public class SpillAndLoadManagerTest {
 	private static final long DEFAULT_MAX_MEMORY = 10240;
 	private static final long DEFAULT_GC_TIME = 30000;
 	private static final float DEFAULT_HIGH_WATERMARK_RATIO = 0.6f;
-	private static final long DEFAULT_HIGH_WATERMARK =
-		(long) (DEFAULT_MAX_MEMORY * DEFAULT_HIGH_WATERMARK_RATIO);
+	private static final long DEFAULT_HIGH_WATERMARK = (long) (DEFAULT_MAX_MEMORY * DEFAULT_HIGH_WATERMARK_RATIO);
 	private static final float DEFAULT_SPILL_SIZE_RATIO = 0.3f;
 	private static final float DEFAULT_LOAD_START_RATIO = 0.2f;
-	private static final long DEFAULT_LOAD_START_SIZE =
-		(long) (DEFAULT_MAX_MEMORY * DEFAULT_LOAD_START_RATIO);
+	private static final long DEFAULT_LOAD_START_SIZE = (long) (DEFAULT_MAX_MEMORY * DEFAULT_LOAD_START_RATIO);
 	private static final float DEFAULT_LOAD_END_RATIO = 0.4f;
-	private static final long DEFAULT_LOAD_END_SIZE =
-		(long) (DEFAULT_MAX_MEMORY * DEFAULT_LOAD_END_RATIO);
+	private static final long DEFAULT_LOAD_END_SIZE = (long) (DEFAULT_MAX_MEMORY * DEFAULT_LOAD_END_RATIO);
 	private static final long DEFAULT_TRIGGER_INTERVAL = 500000;
 	private static final long DEFAULT_RESOURCE_CHECK_INTERVAL = 5000;
 
+	private TestHeapStatusMonitor statusMonitor;
+	private CheckpointManagerImpl checkpointManager;
+
+	@Before
+	public void setUp() {
+		this.statusMonitor = new TestHeapStatusMonitor(DEFAULT_MAX_MEMORY);
+		this.checkpointManager = new CheckpointManagerImpl();
+		checkpointManager.registerCheckpoint(1L, new CheckpointManagerTest.TestRunnableFuture());
+	}
+
 	@Test
 	public void testConstruct() {
-		HeapStatusMonitor statusMonitor = new TestHeapStatusMonitor(DEFAULT_MAX_MEMORY);
 		Configuration conf = buildDefaultConf();
 		SpillAndLoadManagerImpl manager = new SpillAndLoadManagerImpl(
-			new TestStateTableContainer(new HashMap<>()), statusMonitor, conf);
+			new TestStateTableContainer(new HashMap<>()), statusMonitor, checkpointManager, conf);
 
 		assertEquals(DEFAULT_MAX_MEMORY, manager.getMaxMemory());
 		assertEquals(DEFAULT_GC_TIME, manager.getGcTimeThreshold());
@@ -112,10 +121,9 @@ public class SpillAndLoadManagerTest {
 
 	private void testDecideActionBase(
 		HeapStatusMonitor.MonitorResult monitorResult, SpillAndLoadManagerImpl.ActionResult expectedAction) {
-		HeapStatusMonitor statusMonitor = new TestHeapStatusMonitor(DEFAULT_MAX_MEMORY);
 		Configuration conf = buildDefaultConf();
 		SpillAndLoadManagerImpl manager = new SpillAndLoadManagerImpl(
-			new TestStateTableContainer(new HashMap<>()), statusMonitor, conf);
+			new TestStateTableContainer(new HashMap<>()), statusMonitor, checkpointManager, conf);
 
 		SpillAndLoadManagerImpl.ActionResult actionResult = manager.decideAction(monitorResult);
 		assertEquals(expectedAction.action, actionResult.action);
@@ -125,7 +133,31 @@ public class SpillAndLoadManagerTest {
 	}
 
 	@Test
-	public void testSpill() {
+	public void testSpillWithCancelCheckpoint() {
+		testSpillBase(true);
+
+		// verify checkpoint is cancelled
+		assertEquals(1, checkpointManager.getRunningCheckpoints().size());
+		CheckpointManagerTest.TestRunnableFuture future =
+			(CheckpointManagerTest.TestRunnableFuture) checkpointManager.getRunningCheckpoints().get(1L);
+		assertNotNull(future);
+		assertTrue(future.isCancelled());
+		assertTrue(future.isMayInterruptIfRunning());
+	}
+
+	@Test
+	public void testSpillWithoutCancelCheckpoint() {
+		testSpillBase(false);
+
+		// verify checkpoint is not cancelled
+		assertEquals(1, checkpointManager.getRunningCheckpoints().size());
+		CheckpointManagerTest.TestRunnableFuture future =
+			(CheckpointManagerTest.TestRunnableFuture) checkpointManager.getRunningCheckpoints().get(1L);
+		assertNotNull(future);
+		assertFalse(future.isCancelled());
+	}
+
+	private void testSpillBase(boolean cancelCheckpoint) {
 		Map<String, TestSpillableStateTable> stateTableMap = new HashMap<>();
 		Map<String, List<Integer>> expectedResult = new HashMap<>();
 
@@ -166,7 +198,25 @@ public class SpillAndLoadManagerTest {
 		expectedResult.put("table3", Arrays.asList(2, 1));
 		expectedResult.put("table4", Collections.singletonList(0));
 
-		testSpillAndLoadBase(stateTableMap, SpillAndLoadManagerImpl.ActionResult.ofSpill(0.5f), expectedResult);
+		HeapStatusMonitor statusMonitor = new TestHeapStatusMonitor(DEFAULT_MAX_MEMORY);
+		Configuration conf = buildDefaultConf();
+		conf.setBoolean(SpillableOptions.CANCEL_CHECKPOINT, cancelCheckpoint);
+		SpillAndLoadManagerImpl manager = new SpillAndLoadManagerImpl(
+			new TestStateTableContainer(stateTableMap), statusMonitor, checkpointManager, conf);
+
+		SpillAndLoadManagerImpl.ActionResult actionResult = SpillAndLoadManagerImpl.ActionResult.ofSpill(0.5f);
+
+		manager.doSpill(actionResult);
+
+		for (Map.Entry<String, List<Integer>> entry : expectedResult.entrySet()) {
+			String stateTableName = entry.getKey();
+			TestSpillableStateTable stateTable = stateTableMap.get(entry.getKey());
+			List<Integer> expectedGroups = entry.getValue();
+			List<Integer> actualSpill = stateTable.getSpillGroups();
+			List<Integer> actualLoad = stateTable.getLoadGroups();
+			assertEquals(stateTableName, expectedGroups, actualSpill);
+			assertTrue(stateTableName, actualLoad.isEmpty());
+		}
 	}
 
 	@Test
@@ -211,10 +261,10 @@ public class SpillAndLoadManagerTest {
 		expectedResult.put("table3", Arrays.asList(0, 1));
 		expectedResult.put("table4", Collections.singletonList(2));
 
-		testSpillAndLoadBase(stateTableMap, SpillAndLoadManagerImpl.ActionResult.ofLoad(0.5f), expectedResult);
+		testLoadBase(stateTableMap, SpillAndLoadManagerImpl.ActionResult.ofLoad(0.5f), expectedResult);
 	}
 
-	private void testSpillAndLoadBase(
+	private void testLoadBase(
 		Map<String, TestSpillableStateTable> stateTableMap,
 		SpillAndLoadManagerImpl.ActionResult actionResult,
 		Map<String, List<Integer>> expectedResult
@@ -222,13 +272,9 @@ public class SpillAndLoadManagerTest {
 		HeapStatusMonitor statusMonitor = new TestHeapStatusMonitor(DEFAULT_MAX_MEMORY);
 		Configuration conf = buildDefaultConf();
 		SpillAndLoadManagerImpl manager = new SpillAndLoadManagerImpl(
-			new TestStateTableContainer(stateTableMap), statusMonitor, conf);
+			new TestStateTableContainer(stateTableMap), statusMonitor, checkpointManager, conf);
 
-		if (actionResult.action == SpillAndLoadManagerImpl.Action.SPILL) {
-			manager.doSpill(actionResult);
-		} else if (actionResult.action == SpillAndLoadManagerImpl.Action.LOAD) {
-			manager.doLoad(actionResult);
-		}
+		manager.doLoad(actionResult);
 
 		for (Map.Entry<String, List<Integer>> entry : expectedResult.entrySet()) {
 			String stateTableName = entry.getKey();
@@ -236,16 +282,8 @@ public class SpillAndLoadManagerTest {
 			List<Integer> expectedGroups = entry.getValue();
 			List<Integer> actualSpill = stateTable.getSpillGroups();
 			List<Integer> actualLoad = stateTable.getLoadGroups();
-			if (actionResult.action == SpillAndLoadManagerImpl.Action.SPILL) {
-				assertEquals(stateTableName, expectedGroups, actualSpill);
-				assertTrue(stateTableName, actualLoad.isEmpty());
-			} else if (actionResult.action == SpillAndLoadManagerImpl.Action.LOAD) {
-				assertEquals(stateTableName, expectedGroups, actualLoad);
-				assertTrue(stateTableName, actualSpill.isEmpty());
-			} else {
-				assertTrue(stateTableName, actualSpill.isEmpty());
-				assertTrue(stateTableName, actualLoad.isEmpty());
-			}
+			assertEquals(stateTableName, expectedGroups, actualLoad);
+			assertTrue(stateTableName, actualSpill.isEmpty());
 		}
 	}
 

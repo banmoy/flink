@@ -75,7 +75,7 @@ public class SpillableHeapRestoreOperation<K> implements RestoreOperation<Void> 
 	private final KeyGroupRange keyGroupRange;
 	@Nonnegative
 	private final int numberOfKeyGroups;
-	private final HeapSnapshotStrategy<K> snapshotStrategy;
+	private final SpillableSnapshotStrategy<K> snapshotStrategy;
 	private final InternalKeyContext<K> keyContext;
 
 	SpillableHeapRestoreOperation(
@@ -88,7 +88,7 @@ public class SpillableHeapRestoreOperation<K> implements RestoreOperation<Void> 
 		HeapPriorityQueueSetFactory priorityQueueSetFactory,
 		@Nonnull KeyGroupRange keyGroupRange,
 		int numberOfKeyGroups,
-		HeapSnapshotStrategy<K> snapshotStrategy,
+		SpillableSnapshotStrategy<K> snapshotStrategy,
 		InternalKeyContext<K> keyContext) {
 		this.restoreStateHandles = restoreStateHandles;
 		this.keySerializerProvider = keySerializerProvider;

@@ -92,7 +92,7 @@ public class SnapshotCompatibilityTest {
 		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, new File[] {tmp.newFolder()});
 		SpillAndLoadManagerImpl spillAndLoadManager = new SpillAndLoadManagerImpl(
 			new SpillAndLoadManagerImpl.StateTableContainerImpl<>(new HashMap<>()),
-			new TestHeapStatusMonitor(Long.MAX_VALUE), new Configuration());
+			new TestHeapStatusMonitor(Long.MAX_VALUE), new CheckpointManagerImpl(), new Configuration());
 		final SpillableStateTableImpl<Integer, Integer, ArrayList<Integer>> nestedMapsStateTable =
 			new SpillableStateTableImpl<>(keyContext, metaInfo, keySerializer, spaceAllocator, spillAndLoadManager);
 

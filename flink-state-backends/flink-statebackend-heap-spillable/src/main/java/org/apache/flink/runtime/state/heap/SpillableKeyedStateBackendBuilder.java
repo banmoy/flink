@@ -102,17 +102,19 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 
 		boolean debugOffheap = configuration.getBoolean(SpillableOptions.DEBUG_OFFHEAP);
 		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, localPaths);
+		CheckpointManager checkpointManager = new CheckpointManagerImpl();
 		SpillAndLoadManager spillAndLoadManager = debugOffheap ? () -> {} :
 			new SpillAndLoadManagerImpl(
 				new SpillAndLoadManagerImpl.StateTableContainerImpl<>(registeredKVStates),
-				HeapStatusMonitor.getStatusMonitor(), configuration);
+				HeapStatusMonitor.getStatusMonitor(), checkpointManager, configuration);
 		CloseableRegistry cancelStreamRegistryForBackend = new CloseableRegistry();
-		HeapSnapshotStrategy<K> snapshotStrategy = initSnapshotStrategy(
+		SpillableSnapshotStrategy<K> snapshotStrategy = initSnapshotStrategy(
 			registeredKVStates,
 			registeredPQStates,
 			cancelStreamRegistryForBackend,
 			spaceAllocator,
 			spillAndLoadManager,
+			checkpointManager,
 			debugOffheap);
 		InternalKeyContext<K> keyContext = new InternalKeyContextImpl<>(
 			keyGroupRange,
@@ -152,20 +154,22 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 			keyContext,
 			spaceAllocator,
 			spillAndLoadManager,
+			checkpointManager,
 			localPaths);
 	}
 
-	private HeapSnapshotStrategy<K> initSnapshotStrategy(
+	private SpillableSnapshotStrategy<K> initSnapshotStrategy(
 		Map<String, StateTable<K, ?, ?>> registeredKVStates,
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates,
 		CloseableRegistry cancelStreamRegistry,
 		SpaceAllocator spaceAllocator,
 		SpillAndLoadManager spillAndLoadManager,
+		CheckpointManager checkpointManager,
 		boolean debugOffheap) {
 		// TODO whether to support sync strategy
 		SnapshotStrategySynchronicityBehavior<K> synchronicityTrait =
 			new SpillableSnapshotStrategySynchronicityBehavior<>(spaceAllocator, spillAndLoadManager, debugOffheap);
-		return new HeapSnapshotStrategy<>(
+		return new SpillableSnapshotStrategy<>(
 			synchronicityTrait,
 			registeredKVStates,
 			registeredPQStates,
@@ -173,6 +177,7 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 			localRecoveryConfig,
 			keyGroupRange,
 			cancelStreamRegistry,
-			keySerializerProvider);
+			keySerializerProvider,
+			checkpointManager);
 	}
 }
