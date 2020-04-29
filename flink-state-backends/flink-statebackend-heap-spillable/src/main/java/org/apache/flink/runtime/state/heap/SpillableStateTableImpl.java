@@ -214,7 +214,7 @@ public class SpillableStateTableImpl<K, N, S> extends SpillableStateTable<K, N, 
 		try {
 			transferState(stateMap, dstStatMap);
 		} catch (Exception e) {
-			LOG.error("Spill state in keygroup {} failed", keyGroupIndex, e);
+			LOG.error("Spill state in key group {} failed", keyGroupIndex, e);
 			IOUtils.closeQuietly(dstStatMap);
 			throw e;
 		}
@@ -232,7 +232,7 @@ public class SpillableStateTableImpl<K, N, S> extends SpillableStateTable<K, N, 
 		try {
 			transferState(stateMap, dstStatMap);
 		} catch (Exception e) {
-			LOG.error("Load state in keygroup {} failed", keyGroupIndex, e);
+			LOG.error("Load state in key group {} failed", keyGroupIndex, e);
 			throw e;
 		}
 
@@ -241,7 +241,7 @@ public class SpillableStateTableImpl<K, N, S> extends SpillableStateTable<K, N, 
 		try {
 			((CopyOnWriteSkipListStateMap) stateMap).close();
 		} catch (Exception e) {
-			LOG.error("Failed to close state map for keygroup {} after load", keyGroupIndex, e);
+			LOG.error("Failed to close state map for key group {} after load", keyGroupIndex, e);
 			throw e;
 		}
 	}
