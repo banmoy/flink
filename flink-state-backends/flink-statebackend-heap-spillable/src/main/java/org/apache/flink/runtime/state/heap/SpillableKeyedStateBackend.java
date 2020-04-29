@@ -108,6 +108,7 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 		this.spaceAllocator = spaceAllocator;
 		this.spillAndLoadManager = spillAndLoadManager;
 		this.localPaths = localPaths;
+		LOG.info("SpillableKeyedStateBackend is initialized.");
 	}
 
 	@Override

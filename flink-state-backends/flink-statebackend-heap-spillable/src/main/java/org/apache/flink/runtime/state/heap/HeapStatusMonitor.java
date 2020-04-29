@@ -99,7 +99,7 @@ public class HeapStatusMonitor {
 
 		this.checkFuture = this.checkExecutor.scheduleWithFixedDelay(this::runCheck, 10, checkIntervalInMs, TimeUnit.MILLISECONDS);
 
-		LOG.info("{}");
+		LOG.info("Max memory {}, Check interval {}", maxMemory, checkIntervalInMs);
 	}
 
 	private void runCheck() {
