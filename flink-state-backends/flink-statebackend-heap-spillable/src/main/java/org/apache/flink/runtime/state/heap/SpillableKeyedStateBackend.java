@@ -72,7 +72,7 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 
 	private final SpaceAllocator spaceAllocator;
 	private final File[] localPaths;
-	private final SpillAndLoadManagerImpl spillAndLoadManager;
+	private final SpillAndLoadManager spillAndLoadManager;
 
 	public SpillableKeyedStateBackend(
 		TaskKvStateRegistry kvStateRegistry,
@@ -89,7 +89,7 @@ public class SpillableKeyedStateBackend<K> extends HeapKeyedStateBackend<K> {
 		HeapSnapshotStrategy<K> snapshotStrategy,
 		InternalKeyContext<K> keyContext,
 		SpaceAllocator spaceAllocator,
-		SpillAndLoadManagerImpl spillAndLoadManager,
+		SpillAndLoadManager spillAndLoadManager,
 		File[] localPaths) {
 		super(
 			kvStateRegistry,

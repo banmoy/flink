@@ -72,7 +72,17 @@ public class SpillableStateTableImpl<K, N, S> extends SpillableStateTable<K, N, 
 		TypeSerializer<K> keySerializer,
 		SpaceAllocator spaceAllocator,
 		SpillAndLoadManager spillAndLoadManager) {
-		this(keyContext, metaInfo, keySerializer, spaceAllocator, spillAndLoadManager, DEFAULT_ESTIMATE_SAMPLE_COUNT);
+		this(keyContext, metaInfo, keySerializer, spaceAllocator, spillAndLoadManager, DEFAULT_ESTIMATE_SAMPLE_COUNT, false);
+	}
+
+	SpillableStateTableImpl(
+		InternalKeyContext<K> keyContext,
+		RegisteredKeyValueStateBackendMetaInfo<N, S> metaInfo,
+		TypeSerializer<K> keySerializer,
+		SpaceAllocator spaceAllocator,
+		SpillAndLoadManager spillAndLoadManager,
+		boolean debugOffheap) {
+		this(keyContext, metaInfo, keySerializer, spaceAllocator, spillAndLoadManager, DEFAULT_ESTIMATE_SAMPLE_COUNT, debugOffheap);
 	}
 
 	/**
@@ -90,13 +100,14 @@ public class SpillableStateTableImpl<K, N, S> extends SpillableStateTable<K, N, 
 		TypeSerializer<K> keySerializer,
 		SpaceAllocator spaceAllocator,
 		SpillAndLoadManager spillAndLoadManager,
-		int estimateSampleCount) {
+		int estimateSampleCount,
+		boolean debugOffheap) {
 		super(keyContext, metaInfo, keySerializer);
 		this.spaceAllocator = spaceAllocator;
 		this.spillAndLoadManager = spillAndLoadManager;
-		for (int i = 0; i < this.keyGroupedStateMaps.length; i++) {
-			if (keyGroupedStateMaps[i] == null) {
-				this.keyGroupedStateMaps[i] = createStateMap();
+		if (debugOffheap) {
+			for (int i = 0; i < this.keyGroupedStateMaps.length; i++) {
+				this.keyGroupedStateMaps[i] = createSkipListStateMap();
 			}
 		}
 		this.stateMemoryEstimator = StateMemoryEstimatorFactory.createSampleEstimator(keySerializer, metaInfo, estimateSampleCount);

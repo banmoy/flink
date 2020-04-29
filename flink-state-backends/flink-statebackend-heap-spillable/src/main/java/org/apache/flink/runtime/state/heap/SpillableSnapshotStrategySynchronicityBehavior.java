@@ -27,13 +27,22 @@ import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
 class SpillableSnapshotStrategySynchronicityBehavior<K> implements SnapshotStrategySynchronicityBehavior<K> {
 
 	private final SpaceAllocator spaceAllocator;
-	private final SpillAndLoadManagerImpl spillAndLoadManager;
+	private final SpillAndLoadManager spillAndLoadManager;
+	private final boolean debugOffheap;
 
 	SpillableSnapshotStrategySynchronicityBehavior(
 		SpaceAllocator spaceAllocator,
-		SpillAndLoadManagerImpl spillAndLoadManager) {
+		SpillAndLoadManager spillAndLoadManager) {
+		this(spaceAllocator, spillAndLoadManager, false);
+	}
+
+	SpillableSnapshotStrategySynchronicityBehavior(
+		SpaceAllocator spaceAllocator,
+		SpillAndLoadManager spillAndLoadManager,
+		boolean debugOffheap) {
 		this.spaceAllocator = spaceAllocator;
 		this.spillAndLoadManager = spillAndLoadManager;
+		this.debugOffheap = debugOffheap;
 	}
 
 	@Override
@@ -47,6 +56,6 @@ class SpillableSnapshotStrategySynchronicityBehavior<K> implements SnapshotStrat
 		RegisteredKeyValueStateBackendMetaInfo<N, V> newMetaInfo,
 		TypeSerializer<K> keySerializer) {
 		return new SpillableStateTableImpl<>(keyContext, newMetaInfo, keySerializer,
-			spaceAllocator, spillAndLoadManager);
+			spaceAllocator, spillAndLoadManager, debugOffheap);
 	}
 }

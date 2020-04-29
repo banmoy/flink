@@ -42,6 +42,11 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Build the {@link SpillableKeyedStateBackend}.
+ *
+ * @param <K> type of key
+ */
 public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBackendBuilder<K> {
 	/**
 	 * The configuration of local recovery.
@@ -95,17 +100,20 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		// Map of registered priority queue set states
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates = new HashMap<>();
 
+		boolean debugOffheap = configuration.getBoolean(SpillableOptions.DEBUG_OFFHEAP);
 		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, localPaths);
-		SpillAndLoadManagerImpl spillAndLoadManager = new SpillAndLoadManagerImpl(
-			new SpillAndLoadManagerImpl.StateTableContainerImpl<>(registeredKVStates),
-			HeapStatusMonitor.getStatusMonitor(), configuration);
+		SpillAndLoadManager spillAndLoadManager = debugOffheap ? () -> {} :
+			new SpillAndLoadManagerImpl(
+				new SpillAndLoadManagerImpl.StateTableContainerImpl<>(registeredKVStates),
+				HeapStatusMonitor.getStatusMonitor(), configuration);
 		CloseableRegistry cancelStreamRegistryForBackend = new CloseableRegistry();
 		HeapSnapshotStrategy<K> snapshotStrategy = initSnapshotStrategy(
 			registeredKVStates,
 			registeredPQStates,
 			cancelStreamRegistryForBackend,
 			spaceAllocator,
-			spillAndLoadManager);
+			spillAndLoadManager,
+			debugOffheap);
 		InternalKeyContext<K> keyContext = new InternalKeyContextImpl<>(
 			keyGroupRange,
 			numberOfKeyGroups
@@ -152,10 +160,11 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates,
 		CloseableRegistry cancelStreamRegistry,
 		SpaceAllocator spaceAllocator,
-		SpillAndLoadManagerImpl spillAndLoadManager) {
+		SpillAndLoadManager spillAndLoadManager,
+		boolean debugOffheap) {
 		// TODO whether to support sync strategy
 		SnapshotStrategySynchronicityBehavior<K> synchronicityTrait =
-			new SpillableSnapshotStrategySynchronicityBehavior<>(spaceAllocator, spillAndLoadManager);
+			new SpillableSnapshotStrategySynchronicityBehavior<>(spaceAllocator, spillAndLoadManager, debugOffheap);
 		return new HeapSnapshotStrategy<>(
 			synchronicityTrait,
 			registeredKVStates,
