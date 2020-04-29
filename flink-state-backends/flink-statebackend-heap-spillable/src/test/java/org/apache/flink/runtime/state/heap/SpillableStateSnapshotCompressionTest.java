@@ -114,6 +114,7 @@ public class SpillableStateSnapshotCompressionTest  extends TestLogger {
 		ExecutionConfig executionConfig,
 		Collection<KeyedStateHandle> stateHandles)
 		throws Exception {
+		HeapStatusMonitor.initStatusMonitor(Long.MAX_VALUE);
 		return new SpillableKeyedStateBackendBuilder<>(
 			mock(TaskKvStateRegistry.class),
 			StringSerializer.INSTANCE,
