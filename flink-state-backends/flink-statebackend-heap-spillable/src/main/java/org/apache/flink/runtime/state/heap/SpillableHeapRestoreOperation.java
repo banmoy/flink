@@ -105,8 +105,6 @@ public class SpillableHeapRestoreOperation<K> implements RestoreOperation<Void> 
 
 	@Override
 	public Void restore() throws Exception {
-		// TODO release resource if restore failed
-		final Map<Integer, StateMetaInfoSnapshot> kvStatesById = new HashMap<>();
 		registeredKVStates.clear();
 		registeredPQStates.clear();
 
@@ -150,6 +148,8 @@ public class SpillableHeapRestoreOperation<K> implements RestoreOperation<Void> 
 
 				List<StateMetaInfoSnapshot> restoredMetaInfos =
 					serializationProxy.getStateMetaInfoSnapshots();
+
+				final Map<Integer, StateMetaInfoSnapshot> kvStatesById = new HashMap<>();
 
 				createOrCheckStateForMetaInfo(restoredMetaInfos, kvStatesById);
 
