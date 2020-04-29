@@ -96,8 +96,8 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates = new HashMap<>();
 
 		SpaceAllocator spaceAllocator = new SpaceAllocator(configuration, localPaths);
-		SpillAndLoadManager spillAndLoadManager = new SpillAndLoadManager(
-			new SpillAndLoadManager.StateTableContainerImpl<>(registeredKVStates),
+		SpillAndLoadManagerImpl spillAndLoadManager = new SpillAndLoadManagerImpl(
+			new SpillAndLoadManagerImpl.StateTableContainerImpl<>(registeredKVStates),
 			HeapStatusMonitor.getStatusMonitor(), configuration);
 		CloseableRegistry cancelStreamRegistryForBackend = new CloseableRegistry();
 		HeapSnapshotStrategy<K> snapshotStrategy = initSnapshotStrategy(
@@ -152,7 +152,7 @@ public class SpillableKeyedStateBackendBuilder<K>  extends AbstractKeyedStateBac
 		Map<String, HeapPriorityQueueSnapshotRestoreWrapper> registeredPQStates,
 		CloseableRegistry cancelStreamRegistry,
 		SpaceAllocator spaceAllocator,
-		SpillAndLoadManager spillAndLoadManager) {
+		SpillAndLoadManagerImpl spillAndLoadManager) {
 		// TODO whether to support sync strategy
 		SnapshotStrategySynchronicityBehavior<K> synchronicityTrait =
 			new SpillableSnapshotStrategySynchronicityBehavior<>(spaceAllocator, spillAndLoadManager);

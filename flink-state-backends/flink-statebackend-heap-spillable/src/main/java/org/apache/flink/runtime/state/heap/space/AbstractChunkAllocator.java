@@ -46,10 +46,9 @@ public abstract class AbstractChunkAllocator implements ChunkAllocator {
 
 	@Override
 	public Chunk createChunk(int chunkId, AllocateStrategy allocateStrategy) {
-//		MemorySegment segment = allocate(chunkSize);
-//		segments.add(segment);
-//		return new DefaultChunkImpl(chunkId, segment, allocateStrategy);
-		return null;
+		MemorySegment segment = allocate(chunkSize);
+		segments.add(segment);
+		return new DefaultChunkImpl(chunkId, segment, allocateStrategy);
 	}
 
 	@Override

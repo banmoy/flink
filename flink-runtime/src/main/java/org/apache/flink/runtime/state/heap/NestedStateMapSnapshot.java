@@ -103,4 +103,9 @@ public class NestedStateMapSnapshot<K, N, S>
 
 		return count;
 	}
+
+	@Override
+	public void doRelease() {
+		// no resource need to release.
+	}
 }

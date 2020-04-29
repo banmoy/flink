@@ -27,11 +27,11 @@ import org.apache.flink.runtime.state.heap.space.SpaceAllocator;
 class SpillableSnapshotStrategySynchronicityBehavior<K> implements SnapshotStrategySynchronicityBehavior<K> {
 
 	private final SpaceAllocator spaceAllocator;
-	private final SpillAndLoadManager spillAndLoadManager;
+	private final SpillAndLoadManagerImpl spillAndLoadManager;
 
 	SpillableSnapshotStrategySynchronicityBehavior(
 		SpaceAllocator spaceAllocator,
-		SpillAndLoadManager spillAndLoadManager) {
+		SpillAndLoadManagerImpl spillAndLoadManager) {
 		this.spaceAllocator = spaceAllocator;
 		this.spillAndLoadManager = spillAndLoadManager;
 	}

@@ -27,6 +27,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Base class for snapshots of a {@link StateMap}.
@@ -42,8 +43,14 @@ public abstract class StateMapSnapshot<K, N, S, T extends StateMap<K, N, S>> {
 	 */
 	protected final T owningStateMap;
 
+	/**
+	 * Whether this snapshot has been released.
+	 */
+	private AtomicBoolean released;
+
 	public StateMapSnapshot(T stateMap) {
 		this.owningStateMap = Preconditions.checkNotNull(stateMap);
+		this.released = new AtomicBoolean(false);
 	}
 
 	/**
@@ -57,7 +64,16 @@ public abstract class StateMapSnapshot<K, N, S, T extends StateMap<K, N, S>> {
 	 * Release the snapshot.
 	 */
 	public void release() {
+		if (released.compareAndSet(false, true)) {
+			doRelease();
+		}
 	}
+
+	public boolean isReleased() {
+		return released.get();
+	}
+
+	protected abstract void doRelease();
 
 	/**
 	 * Writes the state in this snapshot to output. The state need to be transformed

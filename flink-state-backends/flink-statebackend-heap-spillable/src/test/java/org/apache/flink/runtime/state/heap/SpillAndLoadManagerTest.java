@@ -45,7 +45,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 /**
- * Tests for {@link SpillAndLoadManager}.
+ * Tests for {@link SpillAndLoadManagerImpl}.
  */
 public class SpillAndLoadManagerTest {
 
@@ -68,7 +68,7 @@ public class SpillAndLoadManagerTest {
 	public void testConstruct() {
 		HeapStatusMonitor statusMonitor = new TestHeapStatusMonitor(DEFAULT_MAX_MEMORY);
 		Configuration conf = buildDefaultConf();
-		SpillAndLoadManager manager = new SpillAndLoadManager(
+		SpillAndLoadManagerImpl manager = new SpillAndLoadManagerImpl(
 			new TestStateTableContainer(new HashMap<>()), statusMonitor, conf);
 
 		assertEquals(DEFAULT_MAX_MEMORY, manager.getMaxMemory());
@@ -87,7 +87,7 @@ public class SpillAndLoadManagerTest {
 			System.currentTimeMillis(), 1, DEFAULT_MAX_MEMORY,
 			DEFAULT_LOAD_START_SIZE + 10,
 			DEFAULT_GC_TIME - 10);
-		testDecideActionBase(monitorResult, SpillAndLoadManager.ActionResult.ofNone());
+		testDecideActionBase(monitorResult, SpillAndLoadManagerImpl.ActionResult.ofNone());
 	}
 
 	@Test
@@ -96,7 +96,7 @@ public class SpillAndLoadManagerTest {
 			System.currentTimeMillis(), 1, DEFAULT_MAX_MEMORY,
 			DEFAULT_HIGH_WATERMARK + 10,
 			DEFAULT_GC_TIME + 10);
-		testDecideActionBase(monitorResult, SpillAndLoadManager.ActionResult.ofSpill(DEFAULT_SPILL_SIZE_RATIO));
+		testDecideActionBase(monitorResult, SpillAndLoadManagerImpl.ActionResult.ofSpill(DEFAULT_SPILL_SIZE_RATIO));
 	}
 
 	@Test
@@ -107,19 +107,19 @@ public class SpillAndLoadManagerTest {
 			System.currentTimeMillis(), 1, DEFAULT_MAX_MEMORY,
 			usedMemory,
 			DEFAULT_GC_TIME - 10);
-		testDecideActionBase(monitorResult, SpillAndLoadManager.ActionResult.ofLoad(ratio));
+		testDecideActionBase(monitorResult, SpillAndLoadManagerImpl.ActionResult.ofLoad(ratio));
 	}
 
 	private void testDecideActionBase(
-		HeapStatusMonitor.MonitorResult monitorResult, SpillAndLoadManager.ActionResult expectedAction) {
+		HeapStatusMonitor.MonitorResult monitorResult, SpillAndLoadManagerImpl.ActionResult expectedAction) {
 		HeapStatusMonitor statusMonitor = new TestHeapStatusMonitor(DEFAULT_MAX_MEMORY);
 		Configuration conf = buildDefaultConf();
-		SpillAndLoadManager manager = new SpillAndLoadManager(
+		SpillAndLoadManagerImpl manager = new SpillAndLoadManagerImpl(
 			new TestStateTableContainer(new HashMap<>()), statusMonitor, conf);
 
-		SpillAndLoadManager.ActionResult actionResult = manager.decideAction(monitorResult);
+		SpillAndLoadManagerImpl.ActionResult actionResult = manager.decideAction(monitorResult);
 		assertEquals(expectedAction.action, actionResult.action);
-		if (expectedAction.action != SpillAndLoadManager.Action.NONE) {
+		if (expectedAction.action != SpillAndLoadManagerImpl.Action.NONE) {
 			assertEquals(expectedAction.spillOrLoadRatio, actionResult.spillOrLoadRatio, 1e-6);
 		}
 	}
@@ -166,7 +166,7 @@ public class SpillAndLoadManagerTest {
 		expectedResult.put("table3", Arrays.asList(2, 1));
 		expectedResult.put("table4", Collections.singletonList(0));
 
-		testSpillAndLoadBase(stateTableMap, SpillAndLoadManager.ActionResult.ofSpill(0.5f), expectedResult);
+		testSpillAndLoadBase(stateTableMap, SpillAndLoadManagerImpl.ActionResult.ofSpill(0.5f), expectedResult);
 	}
 
 	@Test
@@ -211,22 +211,22 @@ public class SpillAndLoadManagerTest {
 		expectedResult.put("table3", Arrays.asList(0, 1));
 		expectedResult.put("table4", Collections.singletonList(2));
 
-		testSpillAndLoadBase(stateTableMap, SpillAndLoadManager.ActionResult.ofLoad(0.5f), expectedResult);
+		testSpillAndLoadBase(stateTableMap, SpillAndLoadManagerImpl.ActionResult.ofLoad(0.5f), expectedResult);
 	}
 
 	private void testSpillAndLoadBase(
 		Map<String, TestSpillableStateTable> stateTableMap,
-		SpillAndLoadManager.ActionResult actionResult,
+		SpillAndLoadManagerImpl.ActionResult actionResult,
 		Map<String, List<Integer>> expectedResult
 		) {
 		HeapStatusMonitor statusMonitor = new TestHeapStatusMonitor(DEFAULT_MAX_MEMORY);
 		Configuration conf = buildDefaultConf();
-		SpillAndLoadManager manager = new SpillAndLoadManager(
+		SpillAndLoadManagerImpl manager = new SpillAndLoadManagerImpl(
 			new TestStateTableContainer(stateTableMap), statusMonitor, conf);
 
-		if (actionResult.action == SpillAndLoadManager.Action.SPILL) {
+		if (actionResult.action == SpillAndLoadManagerImpl.Action.SPILL) {
 			manager.doSpill(actionResult);
-		} else if (actionResult.action == SpillAndLoadManager.Action.LOAD) {
+		} else if (actionResult.action == SpillAndLoadManagerImpl.Action.LOAD) {
 			manager.doLoad(actionResult);
 		}
 
@@ -236,10 +236,10 @@ public class SpillAndLoadManagerTest {
 			List<Integer> expectedGroups = entry.getValue();
 			List<Integer> actualSpill = stateTable.getSpillGroups();
 			List<Integer> actualLoad = stateTable.getLoadGroups();
-			if (actionResult.action == SpillAndLoadManager.Action.SPILL) {
+			if (actionResult.action == SpillAndLoadManagerImpl.Action.SPILL) {
 				assertEquals(stateTableName, expectedGroups, actualSpill);
 				assertTrue(stateTableName, actualLoad.isEmpty());
-			} else if (actionResult.action == SpillAndLoadManager.Action.LOAD) {
+			} else if (actionResult.action == SpillAndLoadManagerImpl.Action.LOAD) {
 				assertEquals(stateTableName, expectedGroups, actualLoad);
 				assertTrue(stateTableName, actualSpill.isEmpty());
 			} else {
@@ -360,7 +360,7 @@ public class SpillAndLoadManagerTest {
 		}
 	}
 
-	static class TestStateTableContainer implements SpillAndLoadManager.StateTableContainer {
+	static class TestStateTableContainer implements SpillAndLoadManagerImpl.StateTableContainer {
 
 		private final Map<String, TestSpillableStateTable> registeredKVStates;
 

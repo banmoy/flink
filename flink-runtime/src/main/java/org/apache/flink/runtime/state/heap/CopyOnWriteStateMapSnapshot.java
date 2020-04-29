@@ -71,11 +71,6 @@ public class CopyOnWriteStateMapSnapshot<K, N, S>
 	private final int numberOfEntriesInSnapshotData;
 
 	/**
-	 * Whether this snapshot has been released.
-	 */
-	private boolean released;
-
-	/**
 	 * Creates a new {@link CopyOnWriteStateMapSnapshot}.
 	 *
 	 * @param owningStateMap the {@link CopyOnWriteStateMap} for which this object represents a snapshot.
@@ -86,19 +81,11 @@ public class CopyOnWriteStateMapSnapshot<K, N, S>
 		this.snapshotData = owningStateMap.snapshotMapArrays();
 		this.snapshotVersion = owningStateMap.getStateMapVersion();
 		this.numberOfEntriesInSnapshotData = owningStateMap.size();
-		this.released = false;
 	}
 
 	@Override
-	public void release() {
-		if (!released) {
-			owningStateMap.releaseSnapshot(this);
-			released = true;
-		}
-	}
-
-	public boolean isReleased() {
-		return released;
+	public void doRelease() {
+		owningStateMap.releaseSnapshot(this);
 	}
 
 	/**
