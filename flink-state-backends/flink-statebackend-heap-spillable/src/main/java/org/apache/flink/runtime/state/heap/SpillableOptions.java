@@ -109,9 +109,15 @@ public class SpillableOptions {
 		.withDescription("Interval to check resource. High frequence will degrade performance but"
 			+ " be more sensitive to memory change.");
 
-	private static final ConfigOption[] SUPPORTED_CONFIG = new ConfigOption[]{
+	public static final ConfigOption<Boolean> DEBUG_OFFHEAP = ConfigOptions
+		.key("state.backend.spillable.debug.offheap")
+		.booleanType()
+		.defaultValue(false)
+		.withDescription("Store states offheap for debug");
+
+	public static final ConfigOption[] SUPPORTED_CONFIG = new ConfigOption[]{
 		SPACE_TYPE, CHUNK_SIZE, MAX_MMAP_FILES, HEAP_STATUS_CHECK_INTERVAL, GC_TIME_THRESHOLD, HIGH_WATERMARK_RATIO,
-		SPILL_SIZE_RATIO, LOAD_START_RATIO, LOAD_END_RATIO, TRIGGER_INTERVAL, RESOURCE_CHECK_INTERVAL
+		SPILL_SIZE_RATIO, LOAD_START_RATIO, LOAD_END_RATIO, TRIGGER_INTERVAL, RESOURCE_CHECK_INTERVAL, DEBUG_OFFHEAP
 	};
 
 	public static Configuration filter(ReadableConfig readableConfig) {
@@ -127,6 +133,7 @@ public class SpillableOptions {
 		conf.set(LOAD_END_RATIO, readableConfig.get(LOAD_END_RATIO));
 		conf.set(TRIGGER_INTERVAL, readableConfig.get(TRIGGER_INTERVAL));
 		conf.set(RESOURCE_CHECK_INTERVAL, readableConfig.get(RESOURCE_CHECK_INTERVAL));
+		conf.set(DEBUG_OFFHEAP, readableConfig.get(DEBUG_OFFHEAP));
 
 		return conf;
 	}
